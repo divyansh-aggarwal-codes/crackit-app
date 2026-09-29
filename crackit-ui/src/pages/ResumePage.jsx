@@ -1165,9 +1165,8 @@ export default function ResumePage() {
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "master_resume.pdf";
+        const cleanName = (profile?.fullName || "Candidate").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+        a.download = `${cleanName}_Resume.pdf`;
         a.click();
         URL.revokeObjectURL(url);
         window.dispatchEvent(

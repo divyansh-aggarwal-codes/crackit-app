@@ -221,9 +221,10 @@ export default function QuickScanModal({
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
+        const cleanName = (tailoredData?.fullName || "Candidate").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
         const a = document.createElement("a");
         a.href = url;
-        a.download = `tailored_resume_${template}.pdf`;
+        a.download = `${cleanName}_Resume.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       } else {

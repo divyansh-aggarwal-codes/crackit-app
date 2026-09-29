@@ -115,7 +115,9 @@ export default function JobDetail() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `tailored_resume_${job.companyName || jobId}.pdf`
+        const comp = (job?.companyName || '').trim().replace(/[^a-zA-Z0-9]/g, '_')
+        const role = (job?.title || 'Resume').trim().replace(/[^a-zA-Z0-9]/g, '_')
+        a.download = comp ? `Resume_${comp}_${role}.pdf` : `Resume_${role}.pdf`
         a.click()
         URL.revokeObjectURL(url)
         showToast({ type: 'success', message: 'Tailored resume downloaded!' })
