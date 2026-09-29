@@ -27,8 +27,10 @@ import com.crackit.resume.repository.*;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -227,10 +229,25 @@ public class AiIntegrationService {
         payload.put("githubUrl", user.getGithubUrl() != null ? user.getGithubUrl() : "");
         payload.put("summary", tailored.getTailoredSummary() != null ? tailored.getTailoredSummary() : "");
         payload.put("template", template != null && !template.isBlank() ? template : "compact");
-        payload.put("skills", skills.stream().map(s -> Map.of(
-                "skillName", s,
-                "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
-        )).toList());
+        Set<String> seenSkills = new LinkedHashSet<>();
+        List<Map<String, Object>> finalSkills = new ArrayList<>();
+        for (String s : skills) {
+            if (s != null && !s.isBlank() && seenSkills.add(s.toLowerCase())) {
+                finalSkills.add(Map.of(
+                        "skillName", s,
+                        "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
+                ));
+            }
+        }
+        for (Skill s : userSkills) {
+            if (s.getSkillName() != null && !s.getSkillName().isBlank() && seenSkills.add(s.getSkillName().toLowerCase())) {
+                finalSkills.add(Map.of(
+                        "skillName", s.getSkillName(),
+                        "category", s.getCategory() != null && !s.getCategory().isBlank() ? s.getCategory() : "Other"
+                ));
+            }
+        }
+        payload.put("skills", finalSkills);
         payload.put("experiences", experiencesWithDates);
         payload.put("projects", projects);
         if (eduObj != null) {
@@ -386,6 +403,7 @@ public class AiIntegrationService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("scan", scan);
+        result.put("fullName", user.getFullName() != null ? user.getFullName() : "");
         result.put("tailoredSummary", tailored.getTailoredSummary());
         result.put("tailoredSkills", tailored.getTailoredSkills());
         result.put("tailoredExperiences", expsWithDates);
@@ -448,10 +466,25 @@ public class AiIntegrationService {
         pdfPayload.put("githubUrl", user.getGithubUrl() != null ? user.getGithubUrl() : "");
         pdfPayload.put("summary", summary);
         pdfPayload.put("template", template);
-        pdfPayload.put("skills", skillList.stream().map(s -> Map.of(
-                "skillName", s,
-                "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
-        )).toList());
+        Set<String> seenSkills = new LinkedHashSet<>();
+        List<Map<String, Object>> finalSkills = new ArrayList<>();
+        for (String s : skillList) {
+            if (s != null && !s.isBlank() && seenSkills.add(s.toLowerCase())) {
+                finalSkills.add(Map.of(
+                        "skillName", s,
+                        "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
+                ));
+            }
+        }
+        for (Skill s : userSkills) {
+            if (s.getSkillName() != null && !s.getSkillName().isBlank() && seenSkills.add(s.getSkillName().toLowerCase())) {
+                finalSkills.add(Map.of(
+                        "skillName", s.getSkillName(),
+                        "category", s.getCategory() != null && !s.getCategory().isBlank() ? s.getCategory() : "Other"
+                ));
+            }
+        }
+        pdfPayload.put("skills", finalSkills);
         pdfPayload.put("experiences", experiences);
         pdfPayload.put("projects", projects);
         if (eduObj != null) {

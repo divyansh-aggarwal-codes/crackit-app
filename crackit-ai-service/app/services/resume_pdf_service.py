@@ -614,7 +614,7 @@ class ResumePdfService:
             max_exp_bullets = 3
 
         num_proj = len(projects)
-        max_proj_bullets = 3 if num_proj <= 1 else 2
+        max_proj_bullets = 4 if num_proj <= 1 else 3
         exp_html  = self._exp_html(experiences, max_bullets=max_exp_bullets)
         proj_html = self._proj_html(projects, max_projects=2, max_bullets=max_proj_bullets)
         edu_html  = self._edu_html(education)

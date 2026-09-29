@@ -83,7 +83,7 @@ Projects:
    Transform every experience. If the candidate has only 1 company/role on their profile, generate 4-5 distinct, high-impact bullet points covering different dimensions of their engineering work (e.g. distributed transactions/architecture, REST API scale & throughput, Kafka messaging & asynchronous processing, database indexing & query optimization, system monitoring & fault tolerance). If multiple companies, provide 2-3 bullets per company. Every bullet MUST follow the Google X-Y-Z formula with embedded ATS keywords.
 
 4. **tailoredProjects**:
-   Highlight the candidate's projects. Each project should have 2-3 high-impact bullets detailing the core architecture, backend integrations, and measurable results.
+   Highlight the candidate's projects. If the candidate has only 1 project on their profile, generate 3-4 comprehensive, technical bullet points detailing the core architecture & microservices, event-driven pipelines/caching, database schema/query tuning, and measurable business/performance impact. If multiple projects, generate 2-3 bullets each. Every bullet MUST follow the Google X-Y-Z formula.
 
 5. **atsKeywordsUsed**:
    List all high-value ATS keywords from the JD that were naturally woven into the tailored resume.
