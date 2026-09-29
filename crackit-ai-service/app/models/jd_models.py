@@ -37,10 +37,12 @@ class JDAnalysisRequest(BaseModel):
 
 
 class JDAnalysisResponse(BaseModel):
-    requiredSkills: List[str]
-    preferredSkills: List[str]
-    experienceLevel: str
-    importantTopics: List[str]
-    atsKeywords: List[str]
-    summary: str
-    matchScore: int
+    requiredSkills: List[str] = []
+    preferredSkills: List[str] = []
+    experienceLevel: str = ""
+    importantTopics: List[str] = []
+    atsKeywords: List[str] = []
+    matchedKeywords: List[str] = []
+    missingKeywords: List[str] = []
+    summary: str = ""
+    matchScore: int = 0

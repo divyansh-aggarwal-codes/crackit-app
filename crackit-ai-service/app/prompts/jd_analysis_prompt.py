@@ -76,6 +76,12 @@ Perform a rigorous, production-grade architectural analysis of the Job Descripti
 7. **atsKeywords**:
    List the top 12-18 most critical ATS keywords from the JD (technologies, protocols, architecture patterns) needed for resume screening.
 
+8. **matchedKeywords**:
+   List of ATS keywords from the JD that the candidate ACTUALLY HAS in their provided resume (in skills, experiences, projects, or summary).
+
+9. **missingKeywords**:
+   List of critical ATS keywords from the JD that are COMPLETELY ABSENT from the candidate's resume.
+
 ---
 ### OUTPUT SCHEMA:
 
@@ -86,6 +92,8 @@ Return ONLY valid JSON with this exact structure:
   "experienceLevel": "",
   "importantTopics": [],
   "atsKeywords": [],
+  "matchedKeywords": [],
+  "missingKeywords": [],
   "summary": "",
   "matchScore": 0
 }}

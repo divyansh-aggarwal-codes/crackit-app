@@ -74,6 +74,7 @@ function ChipList({
   items,
   color = "#5b21b6",
   bg = "#ede9fe",
+  icon = null,
 }) {
   if (!items?.length) {
     return (
@@ -106,8 +107,12 @@ function ChipList({
             borderRadius: 999,
             background: bg,
             color,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
           }}
         >
+          {icon && <i className={icon} style={{ fontSize: 11 }} />}
           {item}
         </span>
       ))}
@@ -122,7 +127,12 @@ export default function QuickScanModal({
   const { openUpgradeModal, isPro, aiUsageCount, refreshProfile } = useAuth();
   const [jdText, setJdText] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [tailoring, setTailoring] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState(null);
+  const [tailoredData, setTailoredData] = useState(null);
+  const [activeTab, setActiveTab] = useState("analysis");
+  const [template, setTemplate] = useState("compact");
   const [error, setError] = useState("");
   const [quotaExceeded, setQuotaExceeded] = useState(false);
 
@@ -132,6 +142,8 @@ export default function QuickScanModal({
     setScanning(true);
     setError("");
     setResult(null);
+    setTailoredData(null);
+    setActiveTab("analysis");
     setQuotaExceeded(false);
 
     try {
@@ -158,6 +170,96 @@ export default function QuickScanModal({
     }
 
     setScanning(false);
+  };
+
+  const handleQuickTailor = async () => {
+    if (!jdText.trim()) return;
+
+    setTailoring(true);
+    setError("");
+    setQuotaExceeded(false);
+
+    try {
+      const res = await fetch(`${API}/ai/quick-tailor`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ jdText }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTailoredData(data);
+        if (data.scan) setResult(data.scan);
+        setActiveTab("tailor");
+        if (refreshProfile) refreshProfile();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 402 || errData.error === 'QUOTA_EXCEEDED' || errData.upgradeRequired) {
+          setError(errData.message || "AI limit reached. Upgrade to Pro for unlimited features.");
+          setQuotaExceeded(true);
+        } else {
+          setError(errData.message || "Failed to tailor resume. Ensure your master resume is complete.");
+        }
+      }
+    } catch (e) {
+      setError("Something went wrong while tailoring. Try again.");
+    }
+
+    setTailoring(false);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!tailoredData) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API}/ai/quick-tailor/download`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ ...tailoredData, template }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `tailored_resume_${template}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        setError("Download failed. Please try again.");
+      }
+    } catch {
+      setError("Failed to download PDF.");
+    }
+    setDownloading(false);
+  };
+
+  const handleBulletChange = (expIdx, bIdx, text) => {
+    setTailoredData((prev) => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      copy.tailoredExperiences[expIdx].bullets[bIdx].bulletText = text;
+      return copy;
+    });
+  };
+
+  const handleDeleteBullet = (expIdx, bIdx) => {
+    setTailoredData((prev) => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      copy.tailoredExperiences[expIdx].bullets.splice(bIdx, 1);
+      return copy;
+    });
+  };
+
+  const handleAddBullet = (expIdx) => {
+    setTailoredData((prev) => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy.tailoredExperiences[expIdx].bullets) {
+        copy.tailoredExperiences[expIdx].bullets = [];
+      }
+      copy.tailoredExperiences[expIdx].bullets.push({ bulletText: "", technologies: "" });
+      return copy;
+    });
   };
 
   return createPortal(
@@ -614,14 +716,65 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
             {scanning && (
               <div>
                 <div className="qs-spinner" />
-
                 <p className="qs-scanning-text">
                   Analysing JD against your resume...
                 </p>
               </div>
             )}
 
-            {result && !scanning && (
+            {tailoring && (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div className="qs-spinner" />
+                <p className="qs-scanning-text">
+                  ⚡ Tailoring your resume bullets with Google X-Y-Z formula...
+                </p>
+              </div>
+            )}
+
+            {tailoredData && !scanning && !tailoring && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 18, marginBottom: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('analysis')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: activeTab === 'analysis' ? '#7c3aed' : '#f0eeff',
+                    color: activeTab === 'analysis' ? '#fff' : '#6d28d9',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <i className="ti ti-chart-bar" /> JD Analysis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('tailor')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: activeTab === 'tailor' ? '#7c3aed' : '#f0eeff',
+                    color: activeTab === 'tailor' ? '#fff' : '#6d28d9',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <i className="ti ti-file-text" /> 📄 Tailored Resume
+                </button>
+              </div>
+            )}
+
+            {result && !scanning && !tailoring && activeTab === 'analysis' && (
               <div className="qs-result">
                 <div className="qs-result-header">
                   {result.matchScore != null && (
@@ -643,11 +796,38 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                   </div>
                 </div>
 
+                {result.matchedKeywords?.length > 0 && (
+                  <div className="qs-section">
+                    <div className="qs-section-label" style={{ color: '#059669', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <i className="ti ti-check" /> Matched In Your Resume ({result.matchedKeywords.length})
+                    </div>
+                    <ChipList
+                      items={result.matchedKeywords}
+                      bg="#ecfdf5"
+                      color="#047857"
+                      icon="ti ti-check"
+                    />
+                  </div>
+                )}
+
+                {result.missingKeywords?.length > 0 && (
+                  <div className="qs-section">
+                    <div className="qs-section-label" style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <i className="ti ti-alert-triangle" /> Missing From Resume ({result.missingKeywords.length})
+                    </div>
+                    <ChipList
+                      items={result.missingKeywords}
+                      bg="#fef2f2"
+                      color="#b91c1c"
+                      icon="ti ti-alert-triangle"
+                    />
+                  </div>
+                )}
+
                 <div className="qs-section">
                   <div className="qs-section-label">
                     Required Skills
                   </div>
-
                   <ChipList
                     items={result.requiredSkills}
                     bg="#ede9fe"
@@ -659,7 +839,6 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                   <div className="qs-section-label">
                     Preferred Skills
                   </div>
-
                   <ChipList
                     items={result.preferredSkills}
                     bg="#f5f3ff"
@@ -669,9 +848,8 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
 
                 <div className="qs-section">
                   <div className="qs-section-label">
-                    ATS Keywords
+                    All ATS Keywords
                   </div>
-
                   <ChipList
                     items={result.atsKeywords}
                     bg="#f0fdf4"
@@ -682,9 +860,8 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                 {result.importantTopics?.length > 0 && (
                   <div className="qs-section">
                     <div className="qs-section-label">
-                      Important Topics
+                      Interview Topics
                     </div>
-
                     <ChipList
                       items={result.importantTopics}
                       bg="#fef3c7"
@@ -692,12 +869,168 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                     />
                   </div>
                 )}
+
+                {!tailoredData && (
+                  <div style={{
+                    marginTop: 20,
+                    padding: '16px 20px',
+                    borderRadius: 16,
+                    background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(167,139,250,0.12))',
+                    border: '1px solid rgba(124,58,237,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 12
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: '#1a1040' }}>⚡ Ready to apply for this job?</div>
+                      <div style={{ fontSize: 12, color: '#7c6faa', marginTop: 3 }}>
+                        Tailor your resume bullets with Google X-Y-Z formula and generate a clean 1-page PDF.
+                      </div>
+                    </div>
+                    <button
+                      className="btn-primary"
+                      onClick={handleQuickTailor}
+                      disabled={tailoring}
+                    >
+                      <i className="ti ti-wand" /> Fast Tailor Resume
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tailoredData && !scanning && !tailoring && activeTab === 'tailor' && (
+              <div className="qs-result">
+                <div style={{
+                  padding: '14px 18px',
+                  borderRadius: 14,
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16
+                }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
+                      ✓ Tailored with Google X-Y-Z Formula
+                    </div>
+                    <div style={{ fontSize: 11, color: '#15803d', marginTop: 2 }}>
+                      Review, tweak, or delete any bullet before downloading your PDF.
+                    </div>
+                  </div>
+                  {tailoredData.matchScore != null && (
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#16a34a' }}>
+                      {tailoredData.matchScore}% Tailored Match
+                    </div>
+                  )}
+                </div>
+
+                {tailoredData.tailoredSummary && (
+                  <div className="qs-section">
+                    <div className="qs-section-label">Tailored Summary (Editable)</div>
+                    <textarea
+                      value={tailoredData.tailoredSummary}
+                      onChange={(e) => setTailoredData(prev => ({ ...prev, tailoredSummary: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        minHeight: 70,
+                        padding: 10,
+                        borderRadius: 10,
+                        border: '1px solid #e4daff',
+                        fontFamily: 'inherit',
+                        fontSize: 12.5,
+                        color: '#1a1040',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="qs-section">
+                  <div className="qs-section-label">Curated Skills</div>
+                  <ChipList items={tailoredData.tailoredSkills} bg="#ede9fe" color="#5b21b6" />
+                </div>
+
+                <div className="qs-section">
+                  <div className="qs-section-label">Experience Bullets (In-line Editable)</div>
+                  {tailoredData.tailoredExperiences?.map((exp, expIdx) => (
+                    <div key={expIdx} style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: '#faf9ff', border: '1px solid #ede9fe' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1040', marginBottom: 8 }}>
+                        {exp.role} — <span style={{ color: '#6d28d9' }}>{exp.companyName}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {exp.bullets?.map((b, bIdx) => (
+                          <div key={bIdx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <textarea
+                              value={b.bulletText}
+                              onChange={(e) => handleBulletChange(expIdx, bIdx, e.target.value)}
+                              style={{
+                                flex: 1,
+                                minHeight: 48,
+                                padding: 8,
+                                fontSize: 12,
+                                color: '#1a1040',
+                                borderRadius: 8,
+                                border: '1px solid #d8b4fe',
+                                fontFamily: 'inherit',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBullet(expIdx, bIdx)}
+                              title="Delete bullet"
+                              style={{
+                                background: '#fee2e2',
+                                border: 'none',
+                                color: '#ef4444',
+                                borderRadius: 8,
+                                padding: '6px 8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <i className="ti ti-trash" style={{ fontSize: 13 }} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddBullet(expIdx)}
+                        style={{
+                          marginTop: 8,
+                          background: 'none',
+                          border: '1px dashed #a78bfa',
+                          borderRadius: 8,
+                          padding: '4px 10px',
+                          color: '#7c3aed',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        + Add Bullet
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="qs-section">
+                  <div className="qs-section-label">ATS Keywords Embedded</div>
+                  <ChipList items={tailoredData.atsKeywordsUsed} bg="#f0fdf4" color="#065f46" icon="ti ti-check" />
+                </div>
               </div>
             )}
           </div>
 
           <div className="qs-footer">
-            {!result ? (
+            {!result && !tailoredData ? (
               <>
                 <button
                   className="btn-primary"
@@ -706,13 +1039,32 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                 >
                   {scanning ? (
                     <>
-                      <i className="ti ti-loader" />
+                      <i className="ti ti-loader ti-spin" />
                       Scanning...
                     </>
                   ) : (
                     <>
                       <i className="ti ti-sparkles" />
                       Scan JD
+                    </>
+                  )}
+                </button>
+
+                <button
+                  className="btn-primary"
+                  onClick={handleQuickTailor}
+                  disabled={tailoring || scanning || !jdText.trim()}
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
+                >
+                  {tailoring ? (
+                    <>
+                      <i className="ti ti-loader ti-spin" />
+                      Tailoring...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ti ti-wand" />
+                      ⚡ 1-Click Tailor
                     </>
                   )}
                 </button>
@@ -726,11 +1078,75 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
               </>
             ) : (
               <>
+                {tailoredData && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <select
+                      value={template}
+                      onChange={(e) => setTemplate(e.target.value)}
+                      style={{
+                        fontSize: 12,
+                        padding: '8px 10px',
+                        borderRadius: 10,
+                        border: '1px solid #e4daff',
+                        background: '#fcfaff',
+                        color: '#1a1040',
+                        fontWeight: 600,
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="compact">📄 Compact 1-Page (Strict ATS)</option>
+                      <option value="classic">Classic Clean</option>
+                      <option value="modern">Modern Purple</option>
+                    </select>
+
+                    <button
+                      className="btn-primary"
+                      onClick={handleDownloadPdf}
+                      disabled={downloading}
+                    >
+                      {downloading ? (
+                        <>
+                          <i className="ti ti-loader ti-spin" />
+                          Generating PDF...
+                        </>
+                      ) : (
+                        <>
+                          <i className="ti ti-download" />
+                          Download Tailored PDF
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {!tailoredData && (
+                  <button
+                    className="btn-primary"
+                    onClick={handleQuickTailor}
+                    disabled={tailoring}
+                  >
+                    {tailoring ? (
+                      <>
+                        <i className="ti ti-loader ti-spin" />
+                        Tailoring...
+                      </>
+                    ) : (
+                      <>
+                        <i className="ti ti-wand" />
+                        ⚡ Tailor Resume
+                      </>
+                    )}
+                  </button>
+                )}
+
                 <button
-                  className="btn-primary"
+                  className="btn-ghost"
                   onClick={() => {
                     setResult(null);
+                    setTailoredData(null);
                     setJdText("");
+                    setActiveTab("analysis");
                   }}
                 >
                   <i className="ti ti-refresh" />

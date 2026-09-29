@@ -15,10 +15,12 @@ export default function JobDetail() {
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [tailorLoading, setTailorLoading] = useState(false)
   const [downloadLoading, setDownloadLoading] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [template, setTemplate] = useState('compact')
   const [pageLoading, setPageLoading] = useState(true)
   const navigate = useNavigate()
   const isMobile = window.innerWidth < 768
-
 
   useEffect(() => {
     const loadAll = async () => {
@@ -59,11 +61,53 @@ export default function JobDetail() {
     }
   }
 
+  const handleSaveTailored = async () => {
+    if (!tailored) return
+    setSaveLoading(true)
+    try {
+      const res = await api.put(`/api/ai/jobs/${jobId}/tailored-resume`, tailored)
+      setTailored(res.data)
+      setIsEditing(false)
+      showToast({ type: 'success', message: 'Tailored resume changes saved!' })
+    } catch (err) {
+      showToast({ type: 'error', message: err.response?.data?.message || 'Failed to save changes.' })
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const handleBulletChange = (expIndex, bulletIndex, newText) => {
+    setTailored(prev => {
+      const copy = JSON.parse(JSON.stringify(prev))
+      copy.tailoredExperiences[expIndex].bullets[bulletIndex].bulletText = newText
+      return copy
+    })
+  }
+
+  const handleDeleteBullet = (expIndex, bulletIndex) => {
+    setTailored(prev => {
+      const copy = JSON.parse(JSON.stringify(prev))
+      copy.tailoredExperiences[expIndex].bullets.splice(bulletIndex, 1)
+      return copy
+    })
+  }
+
+  const handleAddBullet = (expIndex) => {
+    setTailored(prev => {
+      const copy = JSON.parse(JSON.stringify(prev))
+      if (!copy.tailoredExperiences[expIndex].bullets) {
+        copy.tailoredExperiences[expIndex].bullets = []
+      }
+      copy.tailoredExperiences[expIndex].bullets.push({ bulletText: '', technologies: '' })
+      return copy
+    })
+  }
+
   const handleDownloadTailored = async () => {
     setDownloadLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_BASE_URL}/api/ai/jobs/${jobId}/tailored-resume/download`, {
+      const res = await fetch(`${API_BASE_URL}/api/ai/jobs/${jobId}/tailored-resume/download?template=${template}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.ok) {
@@ -261,17 +305,30 @@ gap: 18,
             <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1040' }}>JD Analysis</div>
             {analysis.matchScore != null && (
               <div style={{ fontSize: 12, color: '#7c6faa' }}>
-                Raw match: <span style={{ fontWeight: 500, color: '#5b21b6' }}>{analysis.matchScore}%</span>
+                Raw match: <span style={{ fontWeight: 600, color: '#5b21b6' }}>{analysis.matchScore}%</span>
               </div>
             )}
           </div>
+
+          {analysis.matchedKeywords?.length > 0 && (
+            <Section label={`✓ Matched In Your Resume (${analysis.matchedKeywords.length})`}>
+              {analysis.matchedKeywords.map(k => <Chip key={k} success><i className="ti ti-check" style={{ fontSize: 11 }} /> {k}</Chip>)}
+            </Section>
+          )}
+
+          {analysis.missingKeywords?.length > 0 && (
+            <Section label={`⚠ Missing From Your Resume (${analysis.missingKeywords.length})`}>
+              {analysis.missingKeywords.map(k => <Chip key={k} danger><i className="ti ti-alert-triangle" style={{ fontSize: 11 }} /> {k}</Chip>)}
+            </Section>
+          )}
+
           <Section label="Required Skills">
             {analysis.requiredSkills?.map(s => <Chip key={s} purple>{s}</Chip>)}
           </Section>
           <Section label="Preferred Skills">
             {analysis.preferredSkills?.map(s => <Chip key={s}>{s}</Chip>)}
           </Section>
-          <Section label="ATS Keywords">
+          <Section label="All ATS Keywords">
             {analysis.atsKeywords?.map(k => <Chip key={k} light>{k}</Chip>)}
           </Section>
           {analysis.aiSummary && (
@@ -286,15 +343,60 @@ gap: 18,
       {/* Tailored Resume */}
       {tailored && (
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1040' }}>Tailored Resume</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1040' }}>Tailored Resume</div>
               {tailored.matchScore != null && (
-                <div style={{ fontSize: 12, color: '#7c6faa' }}>
-                  Tailored match: <span style={{ fontWeight: 500, color: '#059669' }}>{tailored.matchScore}%</span>
+                <div style={{ fontSize: 12, color: '#7c6faa', marginTop: 2 }}>
+                  Tailored match: <span style={{ fontWeight: 600, color: '#059669' }}>{tailored.matchScore}%</span>
                 </div>
               )}
-              <button onClick={handleDownloadTailored} disabled={downloadLoading} style={{ ...outlineBtnStyle, gap: 6 }}>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <select
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                style={{
+                  fontSize: 12,
+                  padding: '7px 10px',
+                  borderRadius: 10,
+                  border: '1px solid #e4daff',
+                  background: '#fcfaff',
+                  color: '#1a1040',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="compact">📄 Compact 1-Page (Strict ATS)</option>
+                <option value="classic">Classic Clean</option>
+                <option value="modern">Modern Purple</option>
+              </select>
+
+              <button
+                onClick={() => {
+                  if (isEditing) handleSaveTailored()
+                  else setIsEditing(true)
+                }}
+                disabled={saveLoading}
+                style={{
+                  ...outlineBtnStyle,
+                  gap: 6,
+                  color: isEditing ? '#059669' : '#7c3aed',
+                  borderColor: isEditing ? '#10b981' : '#e4daff',
+                  background: isEditing ? '#ecfdf5' : '#fff'
+                }}
+              >
+                {saveLoading
+                  ? <><i className="ti ti-loader-2 ti-spin" style={{ fontSize: 13 }} /> Saving...</>
+                  : isEditing
+                  ? <><i className="ti ti-check" style={{ fontSize: 13 }} /> Save Edits</>
+                  : <><i className="ti ti-pencil" style={{ fontSize: 13 }} /> Edit Bullets</>
+                }
+              </button>
+
+              <button onClick={handleDownloadTailored} disabled={downloadLoading} style={{ ...btnStyle, gap: 6 }}>
                 {downloadLoading
                   ? <><i className="ti ti-loader-2 ti-spin" style={{ fontSize: 13 }} /> Generating...</>
                   : <><i className="ti ti-download" style={{ fontSize: 13 }} /> Download PDF</>
@@ -302,41 +404,126 @@ gap: 18,
               </button>
             </div>
           </div>
+
           {tailored.tailoredSummary && (
             <div style={{ marginBottom: 16 }}>
               <div style={sectionLabelStyle}>Summary</div>
-              <p style={{ fontSize: 13, color: '#4b3f72', lineHeight: 1.6 }}>{tailored.tailoredSummary}</p>
+              {isEditing ? (
+                <textarea
+                  value={tailored.tailoredSummary}
+                  onChange={(e) => setTailored(prev => ({ ...prev, tailoredSummary: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    minHeight: 80,
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1.5px solid #d8b4fe',
+                    fontFamily: 'inherit',
+                    fontSize: 13,
+                    color: '#1a1040',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              ) : (
+                <p style={{ fontSize: 13, color: '#4b3f72', lineHeight: 1.6 }}>{tailored.tailoredSummary}</p>
+              )}
             </div>
           )}
-          <Section label="Skills">
+
+          <Section label="Curated Skills">
             {tailored.tailoredSkills?.map(s => <Chip key={s} purple>{s}</Chip>)}
           </Section>
+
           <div style={{ marginTop: 14 }}>
-            <div style={sectionLabelStyle}>Experience</div>
-            {tailored.tailoredExperiences?.map((exp, i) => (
-              <div key={i} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1040' }}>{exp.role} — {exp.companyName}</div>
-                <ul style={{ marginTop: 6, paddingLeft: 0, listStyle: 'none' }}>
-                  {exp.bullets?.map((b, j) => (
-                    <li key={j} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#4b3f72', marginBottom: 4, lineHeight: 1.5 }}>
-                      <span style={{ marginTop: 5, width: 5, height: 5, borderRadius: '50%', background: '#a78bfa', flexShrink: 0 }} />
-                      {b.bulletText}
+            <div style={sectionLabelStyle}>Experience (Google X-Y-Z Formatted)</div>
+            {tailored.tailoredExperiences?.map((exp, expIdx) => (
+              <div key={expIdx} style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 12, background: '#faf9ff', border: '1px solid #ede9fe' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1040', marginBottom: 8 }}>
+                  {exp.role} — <span style={{ color: '#6d28d9' }}>{exp.companyName}</span>
+                </div>
+
+                <ul style={{ paddingLeft: 0, listStyle: 'none', margin: 0 }}>
+                  {exp.bullets?.map((b, bIdx) => (
+                    <li key={bIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                      <span style={{ marginTop: 7, width: 5, height: 5, borderRadius: '50%', background: '#a78bfa', flexShrink: 0 }} />
+                      {isEditing ? (
+                        <div style={{ display: 'flex', flex: 1, gap: 8, alignItems: 'center' }}>
+                          <textarea
+                            value={b.bulletText}
+                            onChange={(e) => handleBulletChange(expIdx, bIdx, e.target.value)}
+                            style={{
+                              flex: 1,
+                              minHeight: 52,
+                              padding: 8,
+                              fontSize: 12,
+                              color: '#1a1040',
+                              borderRadius: 8,
+                              border: '1px solid #d8b4fe',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBullet(expIdx, bIdx)}
+                            title="Delete bullet"
+                            style={{
+                              background: '#fee2e2',
+                              border: 'none',
+                              color: '#ef4444',
+                              borderRadius: 8,
+                              padding: '6px 8px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <i className="ti ti-trash" style={{ fontSize: 14 }} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.55 }}>
+                          {b.bulletText}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
+
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddBullet(expIdx)}
+                    style={{
+                      marginTop: 6,
+                      background: 'none',
+                      border: '1px dashed #a78bfa',
+                      borderRadius: 8,
+                      padding: '4px 10px',
+                      color: '#7c3aed',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add Bullet
+                  </button>
+                )}
               </div>
             ))}
           </div>
+
           <div style={{ marginTop: 14 }}>
             <div style={sectionLabelStyle}>Projects</div>
             {tailored.tailoredProjects?.map((p, i) => (
-              <div key={i} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1040' }}>{p.title}</div>
-                <div style={{ fontSize: 11, color: '#a094c4', marginTop: 2 }}>{p.techStack}</div>
+              <div key={i} style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#faf9ff', border: '1px solid #ede9fe' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1040' }}>{p.title}</div>
+                {p.techStack && <div style={{ fontSize: 11, color: '#7c3aed', marginTop: 2, fontWeight: 600 }}>{p.techStack}</div>}
                 <div style={{ fontSize: 12, color: '#4b3f72', marginTop: 3 }}>{p.description}</div>
               </div>
             ))}
           </div>
+
           <Section label="ATS Keywords Used">
             {tailored.atsKeywordsUsed?.map(k => <Chip key={k} light>{k}</Chip>)}
           </Section>
@@ -355,31 +542,31 @@ function Section({ label, children }) {
   )
 }
 
-function Chip({ children, purple, light }) {
+function Chip({ children, purple, light, success, danger }) {
   return (
     <span
       style={{
         fontSize: 11,
         fontWeight: 700,
-
-        padding: '6px 11px',
-
+        padding: '5px 10px',
         borderRadius: 999,
-
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
         background:
-          purple
-            ? '#ede9fe'
-            : light
-            ? '#f5f3ff'
-            : '#f0eeff',
-
+          success ? '#ecfdf5' :
+          danger ? '#fef2f2' :
+          purple ? '#ede9fe' :
+          light ? '#f5f3ff' : '#f0eeff',
         color:
-          purple
-            ? '#5b21b6'
-            : '#6d28d9',
-
-        border:
-          '1px solid rgba(124,58,237,0.08)'
+          success ? '#047857' :
+          danger ? '#b91c1c' :
+          purple ? '#5b21b6' : '#6d28d9',
+        border: `1px solid ${
+          success ? 'rgba(16, 185, 129, 0.25)' :
+          danger ? 'rgba(239, 68, 68, 0.25)' :
+          'rgba(124,58,237,0.08)'
+        }`
       }}
     >
       {children}
@@ -392,12 +579,12 @@ const btnStyle = {
   display: 'flex', alignItems: 'center', gap: 6,
   padding: '8px 14px', borderRadius: 10,
   background: '#7c3aed', color: '#fff', border: 'none',
-  fontSize: 12, fontWeight: 500, cursor: 'pointer'
+  fontSize: 12, fontWeight: 600, cursor: 'pointer'
 }
 const outlineBtnStyle = {
   display: 'flex', alignItems: 'center', gap: 6,
   padding: '8px 14px', borderRadius: 10,
   background: '#fff', color: '#7c3aed',
   border: '1px solid #e4daff',
-  fontSize: 12, fontWeight: 500, cursor: 'pointer'
+  fontSize: 12, fontWeight: 600, cursor: 'pointer'
 }

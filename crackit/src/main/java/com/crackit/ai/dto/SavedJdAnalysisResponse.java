@@ -17,6 +17,8 @@ public class SavedJdAnalysisResponse {
     private List<String> preferredSkills;
     private List<String> importantTopics;
     private List<String> atsKeywords;
+    private List<String> matchedKeywords;
+    private List<String> missingKeywords;
     private String experienceLevel;
     private Integer matchScore;
     private String aiSummary;

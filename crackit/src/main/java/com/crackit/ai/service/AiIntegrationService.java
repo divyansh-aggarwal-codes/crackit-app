@@ -3,6 +3,8 @@ package com.crackit.ai.service;
 import com.crackit.ai.client.AiServiceClient;
 import com.crackit.ai.dto.JDAnalysisRequest;
 import com.crackit.ai.dto.JDAnalysisResponse;
+import com.crackit.ai.dto.ResumeTailoringRequest;
+import com.crackit.ai.dto.ResumeTailoringResponse;
 import com.crackit.ai.dto.SavedJdAnalysisResponse;
 import com.crackit.ai.entity.JdAnalysis;
 import com.crackit.ai.entity.TailoredResume;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import com.crackit.resume.entity.*;
 import com.crackit.resume.repository.*;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,6 +106,8 @@ public class AiIntegrationService {
                 .preferredSkills(toJson(aiResponse.getPreferredSkills()))
                 .importantTopics(toJson(aiResponse.getImportantTopics()))
                 .atsKeywords(toJson(aiResponse.getAtsKeywords()))
+                .matchedKeywords(toJson(aiResponse.getMatchedKeywords()))
+                .missingKeywords(toJson(aiResponse.getMissingKeywords()))
                 .experienceLevel(aiResponse.getExperienceLevel())
                 .matchScore(aiResponse.getMatchScore())
                 .aiSummary(aiResponse.getSummary())
@@ -127,6 +132,8 @@ public class AiIntegrationService {
                 .preferredSkills(fromJson(analysis.getPreferredSkills()))
                 .importantTopics(fromJson(analysis.getImportantTopics()))
                 .atsKeywords(fromJson(analysis.getAtsKeywords()))
+                .matchedKeywords(fromJson(analysis.getMatchedKeywords()))
+                .missingKeywords(fromJson(analysis.getMissingKeywords()))
                 .experienceLevel(analysis.getExperienceLevel())
                 .matchScore(analysis.getMatchScore())
                 .aiSummary(analysis.getAiSummary())
@@ -153,6 +160,10 @@ public class AiIntegrationService {
     }
 
     public byte[] generateTailoredResumePdf(String jobId) {
+        return generateTailoredResumePdf(jobId, "compact");
+    }
+
+    public byte[] generateTailoredResumePdf(String jobId, String template) {
         User user = getLoggedInUser();
 
         TailoredResume tailored = tailoredResumeRepository
@@ -215,6 +226,7 @@ public class AiIntegrationService {
         payload.put("linkedinUrl", user.getLinkedinUrl() != null ? user.getLinkedinUrl() : "");
         payload.put("githubUrl", user.getGithubUrl() != null ? user.getGithubUrl() : "");
         payload.put("summary", tailored.getTailoredSummary() != null ? tailored.getTailoredSummary() : "");
+        payload.put("template", template != null && !template.isBlank() ? template : "compact");
         payload.put("skills", skills.stream().map(s -> Map.of(
                 "skillName", s,
                 "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
@@ -284,5 +296,168 @@ public class AiIntegrationService {
         );
 
         return aiServiceClient.analyzeJd(request);
+    }
+
+    public Map<String, Object> enhanceBullet(Map<String, Object> payload) {
+        String email = AuthUtil.getLoggedInUserEmail();
+        if (email != null && !email.isBlank()) {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null) {
+                subscriptionService.checkAndIncrementAiQuota(user);
+            }
+        }
+        return aiServiceClient.enhanceBullet(payload);
+    }
+
+    public Map<String, Object> quickTailor(String jdText) {
+        User user = getLoggedInUser();
+        subscriptionService.checkAndIncrementAiQuota(user);
+
+        // 1. Run Quick Scan
+        JDAnalysisResponse scan = quickScan(jdText);
+
+        // 2. Build Tailoring Request from Master Resume
+        MasterResume masterResume = masterResumeRepository.findByUserId(user.getId())
+                .stream().findFirst()
+                .orElseThrow(() -> new RuntimeException("No master resume found — please create your resume first"));
+
+        List<Skill> skills = skillRepository.findByUserId(user.getId());
+        List<Experience> experiences = experienceRepository.findByUserId(user.getId());
+        List<Project> projects = projectRepository.findByUserId(user.getId());
+
+        ResumeTailoringRequest request = ResumeTailoringRequest.builder()
+                .jdAnalysis(Map.of(
+                        "requiredSkills", scan.getRequiredSkills() != null ? scan.getRequiredSkills() : List.of(),
+                        "preferredSkills", scan.getPreferredSkills() != null ? scan.getPreferredSkills() : List.of(),
+                        "importantTopics", scan.getImportantTopics() != null ? scan.getImportantTopics() : List.of(),
+                        "atsKeywords", scan.getAtsKeywords() != null ? scan.getAtsKeywords() : List.of(),
+                        "matchedKeywords", scan.getMatchedKeywords() != null ? scan.getMatchedKeywords() : List.of(),
+                        "missingKeywords", scan.getMissingKeywords() != null ? scan.getMissingKeywords() : List.of(),
+                        "experienceLevel", scan.getExperienceLevel() != null ? scan.getExperienceLevel() : "",
+                        "summary", scan.getSummary() != null ? scan.getSummary() : ""
+                ))
+                .summary(masterResume.getSummary())
+                .skills(skills.stream().map(s -> Map.<String, Object>of(
+                        "skillName", s.getSkillName(),
+                        "category", s.getCategory() != null ? s.getCategory() : "",
+                        "proficiencyLevel", s.getProficiencyLevel() != null ? s.getProficiencyLevel() : "",
+                        "yearsUsed", s.getYearsUsed() != null ? s.getYearsUsed() : 0
+                )).toList())
+                .experiences(experiences.stream().map(e -> {
+                    List<ExperienceBullet> bullets = experienceBulletRepository.findByExperienceId(e.getId());
+                    return Map.<String, Object>of(
+                            "companyName", e.getCompanyName(),
+                            "role", e.getRole(),
+                            "description", e.getDescription() != null ? e.getDescription() : "",
+                            "bullets", bullets.stream().map(b -> Map.<String, Object>of(
+                                    "bulletText", b.getBulletText(),
+                                    "technologies", b.getTechnologies() != null ? b.getTechnologies() : ""
+                            )).toList()
+                    );
+                }).toList())
+                .projects(projects.stream().map(p -> Map.<String, Object>of(
+                        "title", p.getTitle(),
+                        "description", p.getDescription() != null ? p.getDescription() : "",
+                        "techStack", p.getTechStack() != null ? p.getTechStack() : "",
+                        "impactMetrics", p.getImpactMetrics() != null ? p.getImpactMetrics() : ""
+                )).toList())
+                .build();
+
+        ResumeTailoringResponse tailored = aiServiceClient.tailorResume(request);
+
+        // Cross-reference dates and locations
+        Map<String, Experience> expByCompany = experiences.stream()
+                .collect(Collectors.toMap(e -> e.getCompanyName().toLowerCase(), e -> e, (a, b) -> a));
+
+        List<Map<String, Object>> expsWithDates = tailored.getTailoredExperiences() != null
+                ? tailored.getTailoredExperiences().stream().map(exp -> {
+                    String comp = String.valueOf(exp.getOrDefault("companyName", "")).toLowerCase();
+                    Experience original = expByCompany.get(comp);
+                    Map<String, Object> merged = new LinkedHashMap<>(exp);
+                    if (original != null) {
+                        merged.put("startDate", original.getStartDate() != null ? original.getStartDate().toString() : "");
+                        merged.put("endDate", original.getEndDate() != null ? original.getEndDate().toString() : "");
+                        merged.put("currentCompany", Boolean.TRUE.equals(original.getCurrentCompany()));
+                        merged.put("location", original.getLocation() != null ? original.getLocation() : "");
+                    }
+                    return merged;
+                }).toList()
+                : List.of();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("scan", scan);
+        result.put("tailoredSummary", tailored.getTailoredSummary());
+        result.put("tailoredSkills", tailored.getTailoredSkills());
+        result.put("tailoredExperiences", expsWithDates);
+        result.put("tailoredProjects", tailored.getTailoredProjects());
+        result.put("atsKeywordsUsed", tailored.getAtsKeywordsUsed());
+        result.put("matchScore", tailored.getMatchScore());
+        result.put("matchedKeywords", scan.getMatchedKeywords());
+        result.put("missingKeywords", scan.getMissingKeywords());
+        return result;
+    }
+
+    public byte[] generateDirectResumePdf(Map<String, Object> payload) {
+        User user = getLoggedInUser();
+
+        String template = (String) payload.getOrDefault("template", "compact");
+        Object summaryObj = payload.get("tailoredSummary") != null ? payload.get("tailoredSummary") : payload.get("summary");
+        String summary = summaryObj != null ? String.valueOf(summaryObj) : "";
+
+        Object rawSkills = payload.get("tailoredSkills") != null ? payload.get("tailoredSkills") : payload.get("skills");
+        List<String> skillList = new ArrayList<>();
+        if (rawSkills instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof String s) {
+                    skillList.add(s);
+                } else if (item instanceof Map<?, ?> m && m.get("skillName") != null) {
+                    skillList.add(String.valueOf(m.get("skillName")));
+                }
+            }
+        }
+
+        List<Skill> userSkills = skillRepository.findByUserId(user.getId());
+        Map<String, String> skillCategoryMap = userSkills.stream()
+                .collect(Collectors.toMap(s -> s.getSkillName().toLowerCase(), Skill::getCategory, (a, b) -> a));
+
+        Object expsRaw = payload.get("tailoredExperiences") != null ? payload.get("tailoredExperiences") : payload.get("experiences");
+        List<?> experiences = expsRaw instanceof List<?> list ? list : List.of();
+
+        Object projsRaw = payload.get("tailoredProjects") != null ? payload.get("tailoredProjects") : payload.get("projects");
+        List<?> projects = projsRaw instanceof List<?> list ? list : List.of();
+
+        MasterResume mr = masterResumeRepository.findByUserId(user.getId()).stream().findFirst().orElse(null);
+        String eduRaw = mr != null && mr.getEducation() != null && !mr.getEducation().isBlank()
+                ? mr.getEducation()
+                : user.getEducation();
+        Object eduObj = null;
+        if (eduRaw != null && !eduRaw.isBlank()) {
+            try {
+                eduObj = objectMapper.readValue(eduRaw, Object.class);
+            } catch (Exception ignored) {
+                eduObj = eduRaw;
+            }
+        }
+
+        Map<String, Object> pdfPayload = new LinkedHashMap<>();
+        pdfPayload.put("fullName", user.getFullName() != null ? user.getFullName() : "Candidate");
+        pdfPayload.put("email", user.getEmail());
+        pdfPayload.put("phone", user.getPhone() != null ? user.getPhone() : "");
+        pdfPayload.put("location", user.getLocation() != null ? user.getLocation() : "");
+        pdfPayload.put("linkedinUrl", user.getLinkedinUrl() != null ? user.getLinkedinUrl() : "");
+        pdfPayload.put("githubUrl", user.getGithubUrl() != null ? user.getGithubUrl() : "");
+        pdfPayload.put("summary", summary);
+        pdfPayload.put("template", template);
+        pdfPayload.put("skills", skillList.stream().map(s -> Map.of(
+                "skillName", s,
+                "category", skillCategoryMap.getOrDefault(s.toLowerCase(), "Other")
+        )).toList());
+        pdfPayload.put("experiences", experiences);
+        pdfPayload.put("projects", projects);
+        if (eduObj != null) {
+            pdfPayload.put("education", eduObj);
+        }
+
+        return aiServiceClient.generateResumePdf(pdfPayload);
     }
 }

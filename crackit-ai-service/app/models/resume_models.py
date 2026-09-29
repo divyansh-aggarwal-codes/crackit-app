@@ -100,3 +100,33 @@ class ResumePdfRequest(BaseModel):
     projects: List[dict] = []
     education: Optional[Any] = None
     photoBase64: Optional[str] = None
+    template: Optional[str] = "classic"
+
+
+# ── Bullet enhancer models ─────────────────────────────────
+class BulletFormulaBreakdown(BaseModel):
+    accomplished_x: str = ""
+    measured_by_y: str = ""
+    doing_z: str = ""
+
+
+class BulletAlternative(BaseModel):
+    angle: str = ""
+    bullet: str = ""
+
+
+class BulletEnhanceRequest(BaseModel):
+    bulletText: str
+    role: Optional[str] = ""
+    company: Optional[str] = ""
+    techStack: Optional[str] = ""
+
+
+class BulletEnhanceResponse(BaseModel):
+    original_bullet: str = ""
+    enhanced_bullet: str = ""
+    formula_breakdown: Optional[BulletFormulaBreakdown] = None
+    action_verb: str = ""
+    metric_dimension: str = ""
+    strengths: List[str] = []
+    alternatives: List[BulletAlternative] = []

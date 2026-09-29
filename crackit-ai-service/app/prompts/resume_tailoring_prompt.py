@@ -56,7 +56,7 @@ Projects:
    - **For Frontend / Mobile**: Core Web Vitals (LCP, INP, CLS), Bundle size reduction, App crash-free sessions (99.8%+), First Contentful Paint.
    - **For DevOps / Cloud / SRE**: Deployment frequency, MTTR (Mean Time to Recovery), Cloud infrastructure cost savings, Zero-downtime Canary rollouts, Uptime SLA.
    - **For Data / ML / AI**: Pipeline processing time (ETL reduction), Data freshness SLAs, Query execution optimization, Model inference latency.
-   *ANTI-ANCHORING & METRIC DIVERSITY RULE*: The numbers in the examples above are illustrative patterns only. Do NOT copy or repeat the exact example numbers (e.g., 85%, 45m) verbatim. If the candidate's resume already contains metrics, preserve and elevate their authentic numbers. If numbers are absent, derive realistic, diverse, context-appropriate metrics calibrated to the specific project's scale, company tier, and tech stack.
+   *ANTI-ANCHORING & METRIC DIVERSITY RULE*: The numbers in the examples above are illustrative patterns only. Do NOT copy or repeat the exact example numbers verbatim. If the candidate's resume already contains metrics, preserve and elevate their authentic numbers. If numbers are absent, derive realistic, defensible metrics calibrated to the candidate's actual projects (e.g. realistic API latency cuts, test coverage %, query execution time). Never invent impossible enterprise-scale claims (e.g., "handled 500M daily active users" or "saved $10M") unless explicitly present in the original resume.
 
 4. **TECHNICAL DEPTH OVER BUZZWORDS**:
    Do not just list technology names—state *how* and *why* they were employed in their domain:
@@ -64,14 +64,17 @@ Projects:
    - QA: Page Object Model (POM), data-driven testing, parallel execution, API mocking, contract testing.
    - DevOps: multi-stage Docker builds, Kubernetes manifests, Terraform state locking, Prometheus metrics.
 
-5. **TRUTHFUL ELEVATION (ZERO-HALLUCINATION GUARD)**:
-   Do NOT invent fake employers, false degrees, or completely ungrounded certifications. Strictly elevate, clarify, and frame the candidate's authentic engineering experiences to top 1% industry presentation standards.
+5. **STRICT TRUTH-GUARD & ZERO-HALLUCINATION POLICY (CRITICAL)**:
+   - **NO INVENTED TECHNOLOGIES**: You are STRICTLY FORBIDDEN from adding any programming languages, frameworks, cloud services, databases, or tools that the candidate has NOT mentioned in their profile/resume.
+   - If the Target JD demands a technology the candidate lacks (e.g. JD requires "Apache Kafka" or "AWS EKS", but candidate only has "RabbitMQ" and "Docker"), do NOT claim the candidate built production systems with Kafka or AWS EKS. Instead, emphasize their existing messaging/containerization experience and transferable architecture patterns.
+   - Never invent fake employers, degrees, roles, or certifications.
+   - Every single bullet point must be 100% defendable by the candidate in a rigorous, high-pressure technical interview.
 
 ---
 ### OUTPUT REQUIREMENTS:
 
 1. **tailoredSummary**:
-   A powerful 3-4 sentence elevator pitch. Position the candidate directly as the ideal hire for this role. Highlight core engineering strengths, primary tech stack (Java/Spring Boot, Python/FastAPI, Kafka, Redis, Cloud, etc.), and problem-solving impact.
+   A powerful 3-4 sentence elevator pitch. Position the candidate directly as the ideal hire for this role using their authentic core engineering strengths and primary tech stack. Highlight their problem-solving impact without claiming ungrounded tools.
 
 2. **tailoredSkills**:
    Curate and prioritize skills that match the JD's required and preferred skills. Group or surface high-signal technologies first.

@@ -36,6 +36,12 @@ public class JdAnalysis {
     @Column(name = "ats_keywords", columnDefinition = "JSON")
     private String atsKeywords;
 
+    @Column(name = "matched_keywords", columnDefinition = "JSON")
+    private String matchedKeywords;
+
+    @Column(name = "missing_keywords", columnDefinition = "JSON")
+    private String missingKeywords;
+
     @Column(name = "experience_level", length = 50)
     private String experienceLevel;
 

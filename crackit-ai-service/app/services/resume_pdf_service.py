@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 import re
 from weasyprint import HTML
 
@@ -30,9 +31,19 @@ class ResumePdfService:
         "design": 8,
     }
 
-    def generate_pdf(self, data: dict, template: str = "classic") -> bytes:
-        if template == "modern":
+    def generate_pdf(self, data: Any, template: str = "classic") -> bytes:
+        if not isinstance(data, dict):
+            if hasattr(data, "model_dump"):
+                data = data.model_dump()
+            elif hasattr(data, "dict"):
+                data = data.dict()
+            else:
+                data = dict(data)
+        t = (template or "classic").lower().strip()
+        if t == "modern":
             html = self._build_modern(data)
+        elif t == "compact":
+            html = self._build_compact(data)
         else:
             html = self._build_classic(data)
         return HTML(string=html).write_pdf()
@@ -86,7 +97,7 @@ class ResumePdfService:
         sorted_cats = sorted(grouped.keys(), key=lambda c: (self._category_priority(c), c.lower()))
         return [(cat, grouped[cat]) for cat in sorted_cats if grouped[cat]]
 
-    def _exp_html(self, experiences: list) -> str:
+    def _exp_html(self, experiences: list, max_bullets: int = None) -> str:
         html = ""
         for exp in experiences:
             start = self._fmt_date(exp.get("startDate", ""))
@@ -101,7 +112,11 @@ class ResumePdfService:
             sub_text = " · ".join(filter(None, sub_parts))
 
             bullets_html = ""
-            for b in exp.get("bullets", []):
+            raw_bullets = exp.get("bullets", [])
+            if max_bullets and len(raw_bullets) > max_bullets:
+                raw_bullets = raw_bullets[:max_bullets]
+
+            for b in raw_bullets:
                 text = b.get("bulletText", "") if isinstance(b, dict) else str(b)
                 if text and text.strip():
                     bullets_html += f"<li>{text.strip()}</li>"
@@ -109,6 +124,8 @@ class ResumePdfService:
             # Fallback if bullets was empty but description was provided
             if not bullets_html and exp.get("description"):
                 desc_lines = [l.strip().lstrip("•-* ").strip() for l in exp["description"].replace("\r", "").split("\n") if l.strip()]
+                if max_bullets and len(desc_lines) > max_bullets:
+                    desc_lines = desc_lines[:max_bullets]
                 for l in desc_lines:
                     bullets_html += f"<li>{l}</li>"
 
@@ -124,9 +141,10 @@ class ResumePdfService:
             """
         return html
 
-    def _proj_html(self, projects: list) -> str:
+    def _proj_html(self, projects: list, max_projects: int = None, max_bullets: int = None) -> str:
         html = ""
-        for p in projects:
+        projs = projects[:max_projects] if max_projects else projects
+        for p in projs:
             name = p.get("title", p.get("projectName", ""))
             tech = p.get("techStack", "")
             desc = p.get("description", "")
@@ -135,6 +153,9 @@ class ResumePdfService:
             bullets_html = ""
             # 1. Use explicit bullets if present
             raw_bullets = p.get("bullets", [])
+            if max_bullets and len(raw_bullets) > max_bullets:
+                raw_bullets = raw_bullets[:max_bullets]
+
             if raw_bullets:
                 for b in raw_bullets:
                     text = b.get("bulletText", "") if isinstance(b, dict) else str(b)
@@ -147,6 +168,8 @@ class ResumePdfService:
                 if len(raw_lines) == 1:
                     sentences = [s.strip().lstrip("•-* ").strip() for s in re.split(r'(?<=[.!?])\s+', raw_lines[0]) if len(s.strip()) > 15]
                     raw_lines = sentences if len(sentences) > 1 else raw_lines
+                if max_bullets and len(raw_lines) > max_bullets:
+                    raw_lines = raw_lines[:max_bullets]
                 for l in raw_lines:
                     bullets_html += f"<li>{l}</li>"
 
@@ -543,6 +566,190 @@ class ResumePdfService:
   }}
   ul li::marker {{
     color: #6d28d9;
+  }}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="name">{full_name}</div>
+  <div class="contact">{contact_html}</div>
+</div>
+
+{section("Professional Summary", f"<p class='summary-text'>{summary}</p>" if summary else "")}
+{section("Skills", skills_html)}
+{section("Experience", exp_html)}
+{section("Projects", proj_html)}
+{section("Education", edu_html)}
+
+</body>
+</html>"""
+
+    # ─── Template 3: Compact (Strict 1-Page High-Density Executive Layout) ───
+
+    def _build_compact(self, d: dict) -> str:
+        full_name   = d.get("fullName", "")
+        summary     = d.get("summary", "")
+        skills      = d.get("skills", [])
+        experiences = d.get("experiences", [])
+        projects    = d.get("projects", [])
+        education   = d.get("education") or d.get("educations") or d.get("educationList")
+
+        contact_parts = self._contact_parts(d)
+        contact_html  = " · ".join(contact_parts)
+
+        sorted_skill_tuples = self._skills_by_category(skills)
+        skills_html = ""
+        for cat, names in sorted_skill_tuples:
+            skills_html += f'<div class="skill-row"><span class="skill-cat">{cat}:</span> <span class="skill-val">{", ".join(names)}</span></div>'
+
+        # Strict 1-page limits: cap bullets so entire resume fits comfortably on single page
+        max_exp_bullets = 2 if len(experiences) >= 3 else 3
+        exp_html  = self._exp_html(experiences, max_bullets=max_exp_bullets)
+        proj_html = self._proj_html(projects, max_projects=2, max_bullets=2)
+        edu_html  = self._edu_html(education)
+
+        def section(title, body):
+            if not body or not body.strip():
+                return ""
+            return f"""
+            <div class="section">
+                <div class="section-title">{title}</div>
+                {body}
+            </div>"""
+
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {{
+    size: A4;
+    margin: 18pt 28pt;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 8.5pt;
+    color: #0f172a;
+    line-height: 1.32;
+  }}
+
+  /* Header */
+  .header {{
+    margin-bottom: 8pt;
+    padding-bottom: 4pt;
+    text-align: center;
+  }}
+  .name {{
+    font-size: 18pt;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.3pt;
+    margin-bottom: 2pt;
+    text-transform: uppercase;
+  }}
+  .contact {{
+    font-size: 8pt;
+    color: #475569;
+  }}
+  .contact a {{
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 600;
+  }}
+
+  /* Sections */
+  .section {{
+    margin-bottom: 7pt;
+    page-break-inside: avoid;
+  }}
+  .section-title {{
+    font-size: 8.5pt;
+    font-weight: 800;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.8pt;
+    border-bottom: 1pt solid #0f172a;
+    padding-bottom: 1.5pt;
+    margin-bottom: 4pt;
+  }}
+
+  /* Summary */
+  .summary-text {{
+    font-size: 8.5pt;
+    color: #334155;
+    line-height: 1.34;
+    text-align: justify;
+  }}
+
+  /* Skills */
+  .skill-row {{
+    font-size: 8.5pt;
+    color: #334155;
+    margin-bottom: 1.5pt;
+    line-height: 1.3;
+  }}
+  .skill-cat {{
+    font-weight: 700;
+    color: #0f172a;
+  }}
+  .skill-val {{
+    color: #334155;
+  }}
+
+  /* Entries */
+  .entry {{
+    margin-bottom: 5pt;
+    page-break-inside: avoid;
+  }}
+  .entry-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.5pt;
+  }}
+  .entry-title {{
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: #0f172a;
+  }}
+  .entry-date {{
+    font-size: 8pt;
+    font-weight: 600;
+    color: #475569;
+    white-space: nowrap;
+    text-align: right;
+  }}
+  .entry-sub {{
+    font-size: 8pt;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 1pt;
+  }}
+  .entry-tech {{
+    font-size: 8pt;
+    font-style: italic;
+    color: #475569;
+    margin-bottom: 1.5pt;
+  }}
+  .entry-desc {{
+    font-size: 8.5pt;
+    color: #334155;
+    line-height: 1.32;
+  }}
+
+  ul {{
+    margin-top: 1pt;
+    margin-left: 12pt;
+    list-style-type: disc;
+  }}
+  ul li {{
+    font-size: 8.5pt;
+    color: #1e293b;
+    margin-bottom: 1.5pt;
+    line-height: 1.32;
+    text-align: justify;
   }}
 </style>
 </head>

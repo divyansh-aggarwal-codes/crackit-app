@@ -14,6 +14,8 @@ public class JDAnalysisResponse {
     private String experienceLevel;
     private List<String> importantTopics;
     private List<String> atsKeywords;
+    private List<String> matchedKeywords;
+    private List<String> missingKeywords;
     private String summary;
     private Integer matchScore;
 }

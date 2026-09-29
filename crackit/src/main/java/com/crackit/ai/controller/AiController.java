@@ -46,20 +46,53 @@ public class AiController {
     }
 
     @GetMapping("/jobs/{jobId}/tailored-resume/download")
-    public ResponseEntity<byte[]> downloadTailoredResume(@PathVariable String jobId) {
-        byte[] pdf = aiIntegrationService.generateTailoredResumePdf(jobId);
+    public ResponseEntity<byte[]> downloadTailoredResume(
+            @PathVariable String jobId,
+            @RequestParam(defaultValue = "compact") String template) {
+        byte[] pdf = aiIntegrationService.generateTailoredResumePdf(jobId, template);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tailored-resume.pdf")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }
 
-    @RateLimit(key = "ai_quick_scan", limit = 5, durationSeconds = 60, type = RateLimitType.USER_OR_IP)
+    @PutMapping("/jobs/{jobId}/tailored-resume")
+    public SavedTailoredResumeResponse updateTailoredResume(
+            @PathVariable String jobId,
+            @RequestBody Map<String, Object> payload) {
+        return resumeTailoringService.updateTailoredResume(jobId, payload);
+    }
+
+    @RateLimit(key = "ai_quick_scan", limit = 20, durationSeconds = 60, type = RateLimitType.USER_OR_IP)
     @PostMapping("/quick-scan")
     public JDAnalysisResponse quickScan(@RequestBody Map<String, String> body) {
         String jdText = body.get("jdText");
         if (jdText == null || jdText.isBlank())
             throw new RuntimeException("JD text is required");
         return aiIntegrationService.quickScan(jdText);
+    }
+
+    @RateLimit(key = "ai_quick_tailor", limit = 20, durationSeconds = 60, type = RateLimitType.USER_OR_IP)
+    @PostMapping("/quick-tailor")
+    public Map<String, Object> quickTailor(@RequestBody Map<String, String> body) {
+        String jdText = body.get("jdText");
+        if (jdText == null || jdText.isBlank())
+            throw new RuntimeException("JD text is required");
+        return aiIntegrationService.quickTailor(jdText);
+    }
+
+    @PostMapping("/quick-tailor/download")
+    public ResponseEntity<byte[]> downloadQuickTailoredResume(@RequestBody Map<String, Object> payload) {
+        byte[] pdf = aiIntegrationService.generateDirectResumePdf(payload);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tailored-resume.pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
+    @RateLimit(key = "ai_enhance_bullet", limit = 30, durationSeconds = 60, type = RateLimitType.USER_OR_IP)
+    @PostMapping("/resume/enhance-bullet")
+    public Map<String, Object> enhanceBullet(@RequestBody Map<String, Object> payload) {
+        return aiIntegrationService.enhanceBullet(payload);
     }
 }

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import AiLoadingOverlay from '../components/AiLoadingOverlay'
 import PageHeader from '../components/ui/PageHeader'
 import api, { API_BASE_URL } from '../api/axios'
+import BulletEnhancerModal from '../components/resume/BulletEnhancerModal'
 
 const API = `${API_BASE_URL}/api`;
 
@@ -52,13 +53,19 @@ function SkillTag({ skill, onDelete }) {
   );
 }
 
-function BulletItem({ bullet, onUpdate, onDelete }) {
+function BulletItem({ bullet, onUpdate, onDelete, expRole = "", expCompany = "" }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(bullet.bulletText);
+  const [showEnhancer, setShowEnhancer] = useState(false);
 
   const save = async () => {
     await onUpdate(bullet.id, text);
     setEditing(false);
+  };
+
+  const handleApplyEnhancement = async (enhancedText) => {
+    setText(enhancedText);
+    await onUpdate(bullet.id, enhancedText);
   };
 
   return (
@@ -79,9 +86,28 @@ function BulletItem({ bullet, onUpdate, onDelete }) {
         <div className="bullet-view-row">
           <span className="bullet-dot">•</span>
           <span className="bullet-text">{text}</span>
+          <button
+            className="btn-icon btn-ghost btn-ai-sparkle"
+            title="Enhance with AI (Google X-Y-Z formula)"
+            onClick={() => setShowEnhancer(true)}
+            style={{ color: "#7c3aed" }}
+          >
+            <i className="ti ti-sparkles" />
+          </button>
           <button className="btn-icon btn-ghost" onClick={() => setEditing(true)}><i className="ti ti-edit" /></button>
           <button className="btn-icon btn-ghost btn-danger" onClick={() => onDelete(bullet.id)}><i className="ti ti-trash" /></button>
         </div>
+      )}
+
+      {showEnhancer && (
+        <BulletEnhancerModal
+          isOpen={showEnhancer}
+          onClose={() => setShowEnhancer(false)}
+          bulletText={bullet.bulletText}
+          role={expRole}
+          company={expCompany}
+          onApply={handleApplyEnhancement}
+        />
       )}
     </div>
   );
@@ -189,7 +215,14 @@ const deleteBullet = async (id) => {
       {expanded && (
         <div className="exp-bullets">
           {bullets.map((b) => (
-            <BulletItem key={b.id} bullet={b} onUpdate={updateBullet} onDelete={deleteBullet} />
+            <BulletItem
+              key={b.id}
+              bullet={b}
+              onUpdate={updateBullet}
+              onDelete={deleteBullet}
+              expRole={exp.role || exp.jobTitle || ""}
+              expCompany={exp.companyName || exp.company || ""}
+            />
           ))}
           {addingBullet ? (
             <div className="bullet-edit-row">
@@ -218,6 +251,7 @@ const deleteBullet = async (id) => {
 function ProjectCard({ project, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...project });
+  const [showEnhancer, setShowEnhancer] = useState(false);
 
   const save = async () => {
     await onUpdate(project.id, form);
@@ -236,10 +270,30 @@ function ProjectCard({ project, onUpdate, onDelete }) {
         )}
         </div>
         <div className="proj-actions">
+          <button
+            className="btn-icon btn-ghost"
+            title="Enhance description with Google X-Y-Z formula"
+            onClick={() => setShowEnhancer(true)}
+            style={{ color: "#7c3aed" }}
+          >
+            <i className="ti ti-sparkles" />
+          </button>
           <button className="btn-icon btn-ghost" onClick={() => setEditing(!editing)}><i className="ti ti-edit" /></button>
           <button className="btn-icon btn-ghost btn-danger" onClick={() => onDelete(project.id)}><i className="ti ti-trash" /></button>
         </div>
       </div>
+      {showEnhancer && (
+        <BulletEnhancerModal
+          isOpen={showEnhancer}
+          onClose={() => setShowEnhancer(false)}
+          bulletText={project.description || project.title || project.projectName || ""}
+          role="Project Architecture"
+          company={project.techStack || ""}
+          onApply={async (enhancedText) => {
+            await onUpdate(project.id, { ...project, description: enhancedText });
+          }}
+        />
+      )}
         {project.description && !editing && (
           <div className="proj-desc-wrap" style={{ marginTop: 8 }}>
             {(() => {
@@ -1227,41 +1281,51 @@ const saveEducation = async (eduList) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
-const strengthItems = [
-  {
-    label: 'Personal details',
-    done: true
-  },
-  {
-    label: 'Professional summary',
-    done: !!resume?.summary?.trim()
-  },
-  {
-    label: 'Skills',
-    done: skills.length > 0
-  },
-  {
-    label: 'Experience',
-    done: experiences.length > 0
-  },
-  {
-    label: 'Projects',
-    done: projects.length > 0
-  },
-  {
-    label: 'Education',
-    done: parseEducationList(resume?.education).length > 0
+  // ─── Real-time ATS Optimization & Readiness Metrics ────────────────────────
+  const allExperienceBullets = experiences.flatMap(e => e.bullets || []);
+  const metricRegex = /\b(\d+[%xXkKMm]|\d+\s*(ms|seconds|hours|users|million|billion|lpa|k|rps|qps))\b/i;
+  const metricBulletsCount = allExperienceBullets.filter(b => metricRegex.test(b.bulletText || '')).length;
+  const metricDensityPct = allExperienceBullets.length > 0 ? Math.round((metricBulletsCount / allExperienceBullets.length) * 100) : 0;
+
+  const summaryComplete = !!resume?.summary?.trim() && resume.summary.length >= 60;
+  const skillsComplete = skills.length >= 6;
+  const expComplete = experiences.length > 0 && allExperienceBullets.length >= 2;
+  const projectsComplete = projects.length > 0;
+  const educationComplete = parseEducationList(resume?.education).length > 0;
+
+  let calculatedAtsScore = 0;
+  if (summaryComplete) calculatedAtsScore += 15;
+  else if (resume?.summary?.trim()) calculatedAtsScore += 8;
+
+  if (skills.length >= 10) calculatedAtsScore += 25;
+  else calculatedAtsScore += Math.min(25, skills.length * 2.5);
+
+  if (expComplete) {
+    calculatedAtsScore += 15;
+    calculatedAtsScore += Math.round((metricDensityPct / 100) * 15);
   }
-]
 
-const pct = Math.round(
-  (
-    strengthItems.filter(i => i.done).length /
-    strengthItems.length
-  ) * 100
-)
+  if (projectsComplete) calculatedAtsScore += Math.min(20, projects.length * 10);
+  if (educationComplete) calculatedAtsScore += 10;
 
-const missingItems = strengthItems.filter(i => !i.done)
+  const atsScore = Math.min(100, Math.round(calculatedAtsScore));
+
+  const atsRatingBadge =
+    atsScore >= 90 ? { text: "Top 5% ATS Ready", color: "#059669", bg: "#d1fae5" } :
+    atsScore >= 75 ? { text: "Strong Candidate", color: "#7c3aed", bg: "#ede9fe" } :
+    atsScore >= 50 ? { text: "Needs Metrics", color: "#d97706", bg: "#fef3c7" } :
+    { text: "Draft Profile", color: "#dc2626", bg: "#fee2e2" };
+
+  const atsChecklist = [
+    { label: 'Executive Summary', done: summaryComplete, tip: 'Add 60+ word technical summary' },
+    { label: `Tech Skills (${skills.length}/8+)`, done: skillsComplete, tip: 'Add 6+ categorized skills' },
+    { label: `Metric Bullets (${metricBulletsCount}/${allExperienceBullets.length || 0})`, done: metricDensityPct >= 60 && allExperienceBullets.length >= 2, tip: 'Tap ✨ to add Google X-Y-Z metrics' },
+    { label: `Featured Projects (${projects.length}/2)`, done: projects.length >= 2, tip: 'Add at least 2 technical projects' },
+    { label: 'Academic Credentials', done: educationComplete, tip: 'Add education credentials' }
+  ];
+
+  const missingAtsItems = atsChecklist.filter(i => !i.done);
+  const pct = atsScore;
 
  return (
   <>
@@ -1741,16 +1805,37 @@ const missingItems = strengthItems.filter(i => !i.done)
 <div className="resume-mobile-top">
   <div className="resume-strength-card">
     <div className="strength-title-row">
-      <div className="strength-title">Profile strength</div>
-      <div className="strength-percent">{pct}%</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <i className="ti ti-sparkles" style={{ color: atsRatingBadge.color, fontSize: 16 }} />
+        <span className="strength-title">ATS Readiness Score</span>
+      </div>
+      <span
+        className="strength-percent"
+        style={{
+          color: atsRatingBadge.color,
+          background: atsRatingBadge.bg,
+          padding: '2px 8px',
+          borderRadius: 99,
+          fontSize: '0.85rem'
+        }}
+      >
+        {atsScore}%
+      </span>
     </div>
 
-    <div className="strength-subtitle">
-      Complete your profile to improve job matching.
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, fontSize: '0.74rem' }}>
+      <span style={{ color: '#64748b' }}>Profile Tier:</span>
+      <span style={{ fontWeight: 700, color: atsRatingBadge.color }}>{atsRatingBadge.text}</span>
     </div>
 
-    <div className="strength-bar">
-      <div className="strength-fill" style={{ width: `${pct}%` }} />
+    <div className="strength-bar" style={{ marginTop: 8 }}>
+      <div
+        className="strength-fill"
+        style={{
+          width: `${atsScore}%`,
+          background: atsScore >= 80 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #7c3aed, #a855f7)'
+        }}
+      />
     </div>
   </div>
 
@@ -1780,20 +1865,41 @@ const missingItems = strengthItems.filter(i => !i.done)
 
 <div className="resume-strength-card">
   <div className="strength-title-row">
-    <div className="strength-title">Profile strength</div>
-    <div className="strength-percent">{pct}%</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <i className="ti ti-sparkles" style={{ color: atsRatingBadge.color, fontSize: 16 }} />
+      <span className="strength-title">ATS Readiness</span>
+    </div>
+    <span
+      className="strength-percent"
+      style={{
+        color: atsRatingBadge.color,
+        background: atsRatingBadge.bg,
+        padding: '2px 8px',
+        borderRadius: 99,
+        fontSize: '0.85rem'
+      }}
+    >
+      {atsScore}%
+    </span>
   </div>
 
-  <div className="strength-subtitle">
-    Complete your profile to improve job matching.
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, fontSize: '0.74rem' }}>
+    <span style={{ color: '#64748b' }}>Recruiter Signal:</span>
+    <span style={{ fontWeight: 700, color: atsRatingBadge.color }}>{atsRatingBadge.text}</span>
   </div>
 
-  <div className="strength-bar">
-    <div className="strength-fill" style={{ width: `${pct}%` }} />
+  <div className="strength-bar" style={{ marginTop: 8 }}>
+    <div
+      className="strength-fill"
+      style={{
+        width: `${atsScore}%`,
+        background: atsScore >= 80 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #7c3aed, #a855f7)'
+      }}
+    />
   </div>
 
-  <div className="strength-list">
-    {strengthItems.map(item => (
+  <div className="strength-list" style={{ marginTop: 12 }}>
+    {atsChecklist.map(item => (
       <div
         key={item.label}
         className={`strength-item ${item.done ? 'done' : 'missing'}`}
@@ -1804,17 +1910,18 @@ const missingItems = strengthItems.filter(i => !i.done)
               ? 'ti-circle-check-filled'
               : 'ti-circle-dashed'
           }`}
+          style={{ color: item.done ? '#10b981' : '#94a3b8' }}
         />
-        <span>{item.label}</span>
+        <span style={{ fontSize: '0.78rem' }}>{item.label}</span>
       </div>
     ))}
   </div>
 
-  {missingItems.length > 0 && (
-    <div className="strength-tip">
-      <i className="ti ti-sparkles" />
+  {metricDensityPct < 60 && allExperienceBullets.length > 0 && (
+    <div className="strength-tip" style={{ marginTop: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#6d28d9' }}>
+      <i className="ti ti-bulb" />
       <span>
-        Add {missingItems.map(i => i.label.toLowerCase()).join(', ')} to improve your resume quality.
+        Tip: Click the <strong>✨</strong> icon on any bullet to rewrite it with the <strong>Google X-Y-Z formula</strong>!
       </span>
     </div>
   )}

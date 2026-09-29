@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -68,15 +69,18 @@ public class ResumeTailoringService {
         List<Project> projects = projectRepository.findByUserId(user.getId());
 
         // Build request to Python
+        Map<String, Object> jdAnalysisMap = new LinkedHashMap<>();
+        jdAnalysisMap.put("requiredSkills", fromJson(jdAnalysis.getRequiredSkills()));
+        jdAnalysisMap.put("preferredSkills", fromJson(jdAnalysis.getPreferredSkills()));
+        jdAnalysisMap.put("importantTopics", fromJson(jdAnalysis.getImportantTopics()));
+        jdAnalysisMap.put("atsKeywords", fromJson(jdAnalysis.getAtsKeywords()));
+        jdAnalysisMap.put("matchedKeywords", fromJson(jdAnalysis.getMatchedKeywords()));
+        jdAnalysisMap.put("missingKeywords", fromJson(jdAnalysis.getMissingKeywords()));
+        jdAnalysisMap.put("experienceLevel", jdAnalysis.getExperienceLevel() != null ? jdAnalysis.getExperienceLevel() : "");
+        jdAnalysisMap.put("summary", jdAnalysis.getAiSummary() != null ? jdAnalysis.getAiSummary() : "");
+
         ResumeTailoringRequest request = ResumeTailoringRequest.builder()
-                .jdAnalysis(Map.of(
-                        "requiredSkills", fromJson(jdAnalysis.getRequiredSkills()),
-                        "preferredSkills", fromJson(jdAnalysis.getPreferredSkills()),
-                        "importantTopics", fromJson(jdAnalysis.getImportantTopics()),
-                        "atsKeywords", fromJson(jdAnalysis.getAtsKeywords()),
-                        "experienceLevel", jdAnalysis.getExperienceLevel() != null ? jdAnalysis.getExperienceLevel() : "",
-                        "summary", jdAnalysis.getAiSummary() != null ? jdAnalysis.getAiSummary() : ""
-                ))
+                .jdAnalysis(jdAnalysisMap)
                 .summary(masterResume.getSummary())
                 .skills(skills.stream().map(s -> Map.<String, Object>of(
                         "skillName", s.getSkillName(),
@@ -126,6 +130,26 @@ public class ResumeTailoringService {
         return tailoredResumeRepository.findTopByJobIdOrderByCreatedAtDesc(jobId)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new RuntimeException("No tailored resume found for this job"));
+    }
+
+    public SavedTailoredResumeResponse updateTailoredResume(String jobId, Map<String, Object> payload) {
+        TailoredResume tailored = tailoredResumeRepository.findTopByJobIdOrderByCreatedAtDesc(jobId)
+                .orElseThrow(() -> new RuntimeException("No tailored resume found for this job"));
+
+        if (payload.containsKey("tailoredSummary")) {
+            tailored.setTailoredSummary((String) payload.get("tailoredSummary"));
+        }
+        if (payload.containsKey("tailoredSkills")) {
+            tailored.setTailoredSkills(toJson(payload.get("tailoredSkills")));
+        }
+        if (payload.containsKey("tailoredExperiences")) {
+            tailored.setTailoredExperience(toJson(payload.get("tailoredExperiences")));
+        }
+        if (payload.containsKey("tailoredProjects")) {
+            tailored.setTailoredProjects(toJson(payload.get("tailoredProjects")));
+        }
+
+        return mapToResponse(tailoredResumeRepository.save(tailored));
     }
 
     private SavedTailoredResumeResponse mapToResponse(TailoredResume tailored) {

@@ -7,10 +7,13 @@ from app.models.resume_models import (
     ResumeTailoringResponse,
     ResumePdfRequest,
     ParsedResume,
+    BulletEnhanceRequest,
+    BulletEnhanceResponse,
 )
 from app.services.resume_tailoring_service import ResumeTailoringService
 from app.services.resume_parse_service import ResumeParseService
 from app.services.resume_pdf_service import ResumePdfService
+from app.services.bullet_enhancer_service import BulletEnhancerService
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,16 @@ router = APIRouter()
 resume_tailoring_service = ResumeTailoringService()
 resume_parse_service = ResumeParseService()
 resume_pdf_service = ResumePdfService()
+bullet_enhancer_service = BulletEnhancerService()
+
+
+@router.post("/enhance-bullet", response_model=BulletEnhanceResponse)
+def enhance_bullet(request: BulletEnhanceRequest):
+    try:
+        return bullet_enhancer_service.enhance_bullet(request)
+    except Exception as e:
+        logger.error(f"enhance_bullet error: {e}", exc_info=True)
+        return bullet_enhancer_service._heuristic_fallback(request)
 
 
 @router.post("/tailor-resume", response_model=ResumeTailoringResponse)
@@ -48,7 +61,7 @@ async def parse_resume(file: UploadFile = File(...)):
 def generate_resume_pdf(request: ResumePdfRequest):
     try:
         data = request.model_dump() if hasattr(request, "model_dump") else request.dict()
-        pdf_bytes = resume_pdf_service.generate_pdf(data, template="classic")
+        pdf_bytes = resume_pdf_service.generate_pdf(data, template=request.template or "classic")
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
