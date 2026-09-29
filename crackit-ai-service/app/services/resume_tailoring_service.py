@@ -7,6 +7,7 @@ from google.genai import types
 
 from app.models.resume_models import ResumeTailoringRequest, ResumeTailoringResponse
 from app.prompts.resume_tailoring_prompt import build_resume_tailoring_prompt
+from app.services.gemini_client import generate_content_with_fallback
 
 load_dotenv()
 
@@ -24,8 +25,8 @@ class ResumeTailoringService:
             projects=request.projects
         )
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = generate_content_with_fallback(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

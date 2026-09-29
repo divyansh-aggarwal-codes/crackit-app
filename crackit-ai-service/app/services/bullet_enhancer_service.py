@@ -14,6 +14,7 @@ from app.models.resume_models import (
     BulletAlternative,
 )
 from app.prompts.bullet_enhancer_prompt import build_bullet_enhancer_prompt
+from app.services.gemini_client import generate_content_with_fallback
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -42,8 +43,8 @@ class BulletEnhancerService:
                     tech_stack=request.techStack or "",
                 )
 
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                response = generate_content_with_fallback(
+                    client=client,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",

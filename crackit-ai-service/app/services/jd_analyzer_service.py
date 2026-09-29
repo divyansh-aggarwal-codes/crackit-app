@@ -9,6 +9,8 @@ from app.models.jd_models import JDAnalysisResponse
 from app.models.jd_models import JDAnalysisRequest, JDAnalysisResponse
 from app.prompts.jd_analysis_prompt import build_jd_analysis_prompt
 
+from app.services.gemini_client import generate_content_with_fallback
+
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -24,8 +26,8 @@ class JDAnalyzerService:
             experiences=request.experiences,
             projects=request.projects
         )
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = generate_content_with_fallback(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

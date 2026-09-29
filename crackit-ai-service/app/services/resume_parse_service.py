@@ -18,6 +18,7 @@ from app.models.resume_models import (
     ParsedSkill,
 )
 from app.prompts.resume_parse_prompt import build_resume_parse_prompt
+from app.services.gemini_client import generate_content_with_fallback
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -68,8 +69,8 @@ class ResumeParseService:
             prompt = build_resume_parse_prompt("Extract all resume details accurately from the attached PDF document.")
             contents = [pdf_part, prompt]
 
-        response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = generate_content_with_fallback(
+            client=self.client,
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

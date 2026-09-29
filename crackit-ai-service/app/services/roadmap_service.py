@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from app.prompts.roadmap_prompt import get_roadmap_prompt
+from app.services.gemini_client import generate_content_with_fallback
 
 load_dotenv()
 
@@ -11,12 +12,11 @@ class RoadmapService:
 
     def __init__(self):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = "gemini-2.5-flash"
 
     def generate_roadmap(self, data: dict) -> dict:
         prompt = get_roadmap_prompt(data)
-        response = self.client.models.generate_content(
-            model=self.model,
+        response = generate_content_with_fallback(
+            client=self.client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
