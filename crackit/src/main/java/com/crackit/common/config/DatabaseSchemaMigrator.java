@@ -62,6 +62,10 @@ public class DatabaseSchemaMigrator implements ApplicationRunner {
             // career_roadmaps table
             ensureColumn(stmt, "career_roadmaps", "target_compensation", "VARCHAR(100)");
 
+            // jd_analysis table
+            ensureColumn(stmt, "jd_analysis", "matched_keywords", "JSON");
+            ensureColumn(stmt, "jd_analysis", "missing_keywords", "JSON");
+
             log.info("DatabaseSchemaMigrator [{}]: Schema synchronization completed successfully.", source);
         } catch (Exception e) {
             log.error("DatabaseSchemaMigrator [{}]: Failed to execute schema migration: {}", source, e.getMessage(), e);
@@ -96,6 +100,14 @@ public class DatabaseSchemaMigrator implements ApplicationRunner {
                 stmt.executeUpdate(fallbackSql);
                 log.info("Added column '{}.{}' via IF NOT EXISTS fallback.", tableName, columnName);
             } catch (Exception ex) {
+                if ("JSON".equalsIgnoreCase(columnType)) {
+                    try {
+                        String textSql = String.format("ALTER TABLE `%s` ADD COLUMN `%s` LONGTEXT", tableName, columnName);
+                        stmt.executeUpdate(textSql);
+                        log.info("Added column '{}.{}' via LONGTEXT fallback.", tableName, columnName);
+                        return;
+                    } catch (Exception ignored) {}
+                }
                 log.debug("Column '{}.{}' already exists or could not be added: {}", tableName, columnName, ex.getMessage());
             }
         }
