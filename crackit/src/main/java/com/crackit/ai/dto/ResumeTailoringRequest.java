@@ -15,4 +15,5 @@ public class ResumeTailoringRequest {
     private List<Map<String, Object>> skills;
     private List<Map<String, Object>> experiences;
     private List<Map<String, Object>> projects;
+    private String mode;
 }

@@ -28,6 +28,7 @@ class ResumeTailoringRequest(BaseModel):
     skills: List[dict] = []
     experiences: List[dict] = []
     projects: List[dict] = []
+    mode: Optional[str] = "strict"
 
 
 class ResumeTailoringResponse(BaseModel):
@@ -36,6 +37,8 @@ class ResumeTailoringResponse(BaseModel):
     tailoredExperiences: List[TailoredExperience] = []
     tailoredProjects: List[TailoredProject] = []
     atsKeywordsUsed: List[str] = []
+    injectedSkills: List[str] = []
+    learningNotes: List[str] = []
     matchScore: int = 0
 
 

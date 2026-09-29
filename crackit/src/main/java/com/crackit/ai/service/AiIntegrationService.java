@@ -327,6 +327,10 @@ public class AiIntegrationService {
     }
 
     public Map<String, Object> quickTailor(String jdText) {
+        return quickTailor(jdText, "strict");
+    }
+
+    public Map<String, Object> quickTailor(String jdText, String mode) {
         User user = getLoggedInUser();
         subscriptionService.checkAndIncrementAiQuota(user);
 
@@ -378,6 +382,7 @@ public class AiIntegrationService {
                         "techStack", p.getTechStack() != null ? p.getTechStack() : "",
                         "impactMetrics", p.getImpactMetrics() != null ? p.getImpactMetrics() : ""
                 )).toList())
+                .mode(mode)
                 .build();
 
         ResumeTailoringResponse tailored = aiServiceClient.tailorResume(request);
@@ -409,6 +414,9 @@ public class AiIntegrationService {
         result.put("tailoredExperiences", expsWithDates);
         result.put("tailoredProjects", tailored.getTailoredProjects());
         result.put("atsKeywordsUsed", tailored.getAtsKeywordsUsed());
+        result.put("injectedSkills", tailored.getInjectedSkills() != null ? tailored.getInjectedSkills() : List.of());
+        result.put("learningNotes", tailored.getLearningNotes() != null ? tailored.getLearningNotes() : List.of());
+        result.put("mode", mode != null ? mode : "strict");
         result.put("matchScore", tailored.getMatchScore());
         result.put("matchedKeywords", scan.getMatchedKeywords());
         result.put("missingKeywords", scan.getMissingKeywords());

@@ -15,5 +15,7 @@ public class ResumeTailoringResponse {
     private List<Map<String, Object>> tailoredExperiences;
     private List<Map<String, Object>> tailoredProjects;
     private List<String> atsKeywordsUsed;
+    private List<String> injectedSkills;
+    private List<String> learningNotes;
     private Integer matchScore;
 }

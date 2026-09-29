@@ -22,7 +22,8 @@ class ResumeTailoringService:
             summary=request.summary,
             skills=request.skills,
             experiences=request.experiences,
-            projects=request.projects
+            projects=request.projects,
+            mode=request.mode or "strict"
         )
 
         response = generate_content_with_fallback(

@@ -133,6 +133,7 @@ export default function QuickScanModal({
   const [tailoredData, setTailoredData] = useState(null);
   const [activeTab, setActiveTab] = useState("analysis");
   const [template, setTemplate] = useState("compact");
+  const [tailoringMode, setTailoringMode] = useState("strict");
   const [error, setError] = useState("");
   const [quotaExceeded, setQuotaExceeded] = useState(false);
 
@@ -172,9 +173,10 @@ export default function QuickScanModal({
     setScanning(false);
   };
 
-  const handleQuickTailor = async () => {
+  const handleQuickTailor = async (overrideMode) => {
     if (!jdText.trim()) return;
 
+    const modeToUse = (typeof overrideMode === 'string' && overrideMode) ? overrideMode : tailoringMode;
     setTailoring(true);
     setError("");
     setQuotaExceeded(false);
@@ -183,7 +185,7 @@ export default function QuickScanModal({
       const res = await fetch(`${API}/ai/quick-tailor`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ jdText }),
+        body: JSON.stringify({ jdText, mode: modeToUse }),
       });
 
       if (res.ok) {
@@ -677,6 +679,99 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
               autoFocus
             />
 
+            {!result && !tailoredData && (
+              <div style={{
+                marginTop: 12,
+                padding: '12px 14px',
+                background: '#fcfaff',
+                border: '1px solid #ebdffd',
+                borderRadius: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#3b0764' }}>
+                    ATS Tailoring Mode
+                  </span>
+                  <span style={{ fontSize: 11, color: '#7c6faa', fontWeight: 600 }}>
+                    {tailoringMode === 'aggressive' ? '⚡ +8% to +15% Match Boost' : '🛡️ 100% Profile Truth'}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: 6,
+                  background: '#ede9fe',
+                  padding: 3,
+                  borderRadius: 10,
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setTailoringMode("strict")}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: tailoringMode === 'strict' ? '#ffffff' : 'transparent',
+                      color: tailoringMode === 'strict' ? '#1e1b4b' : '#6b7280',
+                      fontWeight: tailoringMode === 'strict' ? 700 : 500,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      boxShadow: tailoringMode === 'strict' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>🛡️ Strict Profile</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTailoringMode("aggressive")}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: tailoringMode === 'aggressive' ? '#ffffff' : 'transparent',
+                      color: tailoringMode === 'aggressive' ? '#6d28d9' : '#6b7280',
+                      fontWeight: tailoringMode === 'aggressive' ? 700 : 500,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      boxShadow: tailoringMode === 'aggressive' ? '0 1px 3px rgba(124,58,237,0.2)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>⚡ Aggressive ATS Boost</span>
+                    <span style={{
+                      fontSize: 10,
+                      background: '#dcfce7',
+                      color: '#15803d',
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: 5
+                    }}>
+                      Boost
+                    </span>
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, lineHeight: 1.4 }}>
+                  {tailoringMode === 'strict' ? (
+                    <span>🛡️ <strong>Strict Truth:</strong> Uses only tools present in your master profile. Zero invented tools.</span>
+                  ) : (
+                    <span>⚡ <strong>Aggressive Maximizer:</strong> Strategically bridges 2-3 adjacent, fast-learn skills (e.g. Kubernetes, Testcontainers) to pass strict ATS filters, with interview prep study tips.</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="qs-error" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -879,24 +974,103 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                     background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(167,139,250,0.12))',
                     border: '1px solid rgba(124,58,237,0.2)',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
+                    flexDirection: 'column',
                     gap: 12
                   }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: '#1a1040' }}>⚡ Ready to apply for this job?</div>
-                      <div style={{ fontSize: 12, color: '#7c6faa', marginTop: 3 }}>
-                        Tailor your resume bullets with Google X-Y-Z formula and generate a clean 1-page PDF.
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#1a1040' }}>⚡ Ready to apply for this job?</div>
+                        <div style={{ fontSize: 12, color: '#7c6faa', marginTop: 3 }}>
+                          Tailor your resume bullets with Google X-Y-Z formula and generate a clean 1-page PDF.
+                        </div>
                       </div>
+                      <button
+                        className="btn-primary"
+                        onClick={() => handleQuickTailor(tailoringMode)}
+                        disabled={tailoring}
+                        style={{
+                          background: tailoringMode === 'aggressive'
+                            ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
+                            : 'linear-gradient(135deg, #059669, #10b981)'
+                        }}
+                      >
+                        <i className="ti ti-wand" /> {tailoringMode === 'aggressive' ? '⚡ Fast Tailor (Aggressive Boost)' : '🛡️ Fast Tailor Resume'}
+                      </button>
                     </div>
-                    <button
-                      className="btn-primary"
-                      onClick={handleQuickTailor}
-                      disabled={tailoring}
-                    >
-                      <i className="ti ti-wand" /> Fast Tailor Resume
-                    </button>
+
+                    <div style={{
+                      display: 'flex',
+                      gap: 6,
+                      background: 'rgba(237, 233, 254, 0.7)',
+                      padding: 3,
+                      borderRadius: 10,
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => setTailoringMode("strict")}
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: tailoringMode === 'strict' ? '#ffffff' : 'transparent',
+                          color: tailoringMode === 'strict' ? '#1e1b4b' : '#6b7280',
+                          fontWeight: tailoringMode === 'strict' ? 700 : 500,
+                          fontSize: 11.5,
+                          cursor: 'pointer',
+                          boxShadow: tailoringMode === 'strict' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <span>🛡️ Strict Profile (Exact Match)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTailoringMode("aggressive")}
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: tailoringMode === 'aggressive' ? '#ffffff' : 'transparent',
+                          color: tailoringMode === 'aggressive' ? '#6d28d9' : '#6b7280',
+                          fontWeight: tailoringMode === 'aggressive' ? 700 : 500,
+                          fontSize: 11.5,
+                          cursor: 'pointer',
+                          boxShadow: tailoringMode === 'aggressive' ? '0 1px 3px rgba(124,58,237,0.2)' : 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <span>⚡ Aggressive ATS Boost</span>
+                        <span style={{
+                          fontSize: 10,
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: 5
+                        }}>
+                          +8-15%
+                        </span>
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.4 }}>
+                      {tailoringMode === 'strict' ? (
+                        <span>🛡️ Strictly uses tools on your profile. Zero ungrounded skills.</span>
+                      ) : (
+                        <span>⚡ Bridges 2-3 adjacent, easily learnable missing JD skills into your resume bullets to boost your score by +8% to +15%, with interview study notes.</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -904,6 +1078,127 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
 
             {tailoredData && !scanning && !tailoring && activeTab === 'tailor' && (
               <div className="qs-result">
+                {/* Mode Switcher Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#f8fafc',
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  border: '1px solid #e2e8f0',
+                  marginBottom: 14,
+                  flexWrap: 'wrap',
+                  gap: 10
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Active Mode:</span>
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: tailoredData.injectedSkills?.length > 0 ? '#7c3aed' : '#059669',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      {tailoredData.injectedSkills?.length > 0 ? '⚡ Aggressive ATS Boost' : '🛡️ Strict Profile Truth'}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextMode = tailoredData.injectedSkills?.length > 0 ? 'strict' : 'aggressive';
+                      setTailoringMode(nextMode);
+                      handleQuickTailor(nextMode);
+                    }}
+                    disabled={tailoring}
+                    style={{
+                      background: tailoredData.injectedSkills?.length > 0 ? '#ede9fe' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                      color: tailoredData.injectedSkills?.length > 0 ? '#6d28d9' : '#ffffff',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    {tailoredData.injectedSkills?.length > 0
+                      ? '🛡️ Re-tailor in Strict Mode'
+                      : '⚡ Re-tailor with Aggressive Boost (+8-15%)'}
+                  </button>
+                </div>
+
+                {/* Injected Skills Notice Banner with interview prep notes */}
+                {tailoredData.injectedSkills?.length > 0 && (
+                  <div style={{
+                    padding: '14px 16px',
+                    borderRadius: 12,
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    marginBottom: 14
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: '#92400e', fontSize: 13 }}>
+                        <span>⚡</span>
+                        <span>ATS Maximizer: {tailoredData.injectedSkills.length} Fast-Learn Skills Bridged</span>
+                      </div>
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        background: '#fef3c7',
+                        color: '#b45309',
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        border: '1px solid #fcd34d'
+                      }}>
+                        Passes Strict ATS Filters
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: 11.5, color: '#78350f', margin: '6px 0 10px 0', lineHeight: 1.4 }}>
+                      These adjacent skills were bridged from the JD into your resume because they are natural extensions of your stack and easily learnable in a few days. Review these study notes before your interview:
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {tailoredData.injectedSkills.map((sk, idx) => (
+                        <div key={idx} style={{
+                          background: '#ffffff',
+                          border: '1px solid #fef08a',
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 2
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: '#ecfdf5',
+                              color: '#065f46',
+                              padding: '2px 6px',
+                              borderRadius: 4
+                            }}>
+                              {sk}
+                            </span>
+                            <span style={{ fontSize: 10.5, color: '#a16207', fontWeight: 600 }}>Fast-Learn Bridge</span>
+                          </div>
+                          {tailoredData.learningNotes?.[idx] && (
+                            <div style={{ fontSize: 11.5, color: '#451a03', marginTop: 2, lineHeight: 1.35 }}>
+                              💡 <strong>Interview Prep:</strong> {tailoredData.learningNotes[idx]}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{
                   padding: '14px 18px',
                   borderRadius: 14,
@@ -923,8 +1218,15 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                     </div>
                   </div>
                   {tailoredData.matchScore != null && (
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#16a34a' }}>
-                      {tailoredData.matchScore}% Tailored Match
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#16a34a' }}>
+                        {tailoredData.matchScore}% Match
+                      </div>
+                      {tailoredData.injectedSkills?.length > 0 && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#d97706' }}>
+                          ⚡ Boosted ATS Score
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1053,9 +1355,13 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
 
                 <button
                   className="btn-primary"
-                  onClick={handleQuickTailor}
+                  onClick={() => handleQuickTailor(tailoringMode)}
                   disabled={tailoring || scanning || !jdText.trim()}
-                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
+                  style={{
+                    background: tailoringMode === 'aggressive'
+                      ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
+                      : 'linear-gradient(135deg, #059669, #10b981)'
+                  }}
                 >
                   {tailoring ? (
                     <>
@@ -1065,7 +1371,7 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                   ) : (
                     <>
                       <i className="ti ti-wand" />
-                      ⚡ 1-Click Tailor
+                      {tailoringMode === 'aggressive' ? '⚡ 1-Click Boost Tailor' : '⚡ 1-Click Tailor'}
                     </>
                   )}
                 </button>
@@ -1124,8 +1430,13 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                 {!tailoredData && (
                   <button
                     className="btn-primary"
-                    onClick={handleQuickTailor}
+                    onClick={() => handleQuickTailor(tailoringMode)}
                     disabled={tailoring}
+                    style={{
+                      background: tailoringMode === 'aggressive'
+                        ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
+                        : 'linear-gradient(135deg, #059669, #10b981)'
+                    }}
                   >
                     {tailoring ? (
                       <>
@@ -1135,7 +1446,7 @@ e.g. We are looking for a Senior Java Backend Engineer with 3+ years of experien
                     ) : (
                       <>
                         <i className="ti ti-wand" />
-                        ⚡ Tailor Resume
+                        {tailoringMode === 'aggressive' ? '⚡ Tailor (Aggressive Boost)' : '⚡ Tailor Resume'}
                       </>
                     )}
                   </button>

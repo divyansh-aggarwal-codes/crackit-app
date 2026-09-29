@@ -78,7 +78,8 @@ public class AiController {
         String jdText = body.get("jdText");
         if (jdText == null || jdText.isBlank())
             throw new RuntimeException("JD text is required");
-        return aiIntegrationService.quickTailor(jdText);
+        String mode = body.getOrDefault("mode", "strict");
+        return aiIntegrationService.quickTailor(jdText, mode);
     }
 
     @PostMapping("/quick-tailor/download")

@@ -6,8 +6,52 @@ def build_resume_tailoring_prompt(
         summary: str,
         skills: list,
         experiences: list,
-        projects: list
+        projects: list,
+        mode: str = "strict"
 ) -> str:
+    is_aggressive = (mode or "").lower() == "aggressive"
+
+    if is_aggressive:
+        mode_section = """
+---
+### SPECIAL OPERATIONAL MODE: AGGRESSIVE ATS TARGET MAXIMIZER (ACTIVATED)
+The candidate has explicitly enabled AGGRESSIVE MODE to maximize ATS pass rate for high-requirement job descriptions.
+Your directives for Aggressive Mode:
+1. **IDENTIFY 2 TO 3 ADJACENT, LOW-BARRIER MISSING SKILLS**:
+   Inspect the Target JD's `requiredSkills`, `missingKeywords`, and `atsKeywords` that the candidate does NOT currently have in their master profile.
+   Select EXACTLY 2 to 3 skills that are NATURAL, LOGICAL ADJACENT EXTENSIONS of technologies they already use, and which can be learned at a solid foundational level within 1 to 2 weeks.
+   - PERMITTED ADJACENT BRIDGES:
+     * Knows Docker / Containers -> bridge basic Kubernetes (Pods, Deployments, Services, Helm charts)
+     * Knows MySQL / PostgreSQL / RDBMS -> bridge MongoDB or Redis cache-aside patterns
+     * Knows JUnit / Mockito -> bridge Testcontainers or WireMock integration testing
+     * Knows Git / basic CI -> bridge GitHub Actions or Jenkins declarative pipelines
+     * Knows REST APIs -> bridge gRPC basics or GraphQL schema queries
+     * Knows Spring Boot / Java -> bridge Spring Cloud (Eureka/Config Server/Resilience4j) or Java 17/21 modern syntax (Records, Virtual Threads)
+     * Knows Linux / Shell -> bridge Prometheus & Grafana metric scraping or OpenTelemetry
+   - STRICTLY FORBIDDEN INVENTIONS:
+     * DO NOT bridge completely alien stacks (e.g., do NOT inject C++, Rust, Swift, or native mobile if the candidate is a Java backend dev).
+     * DO NOT invent fake seniority, fake companies, fake degrees, or 10 years of cloud architecting.
+
+2. **INTEGRATE INTO TAILORED CONTENT**:
+   - Include these 2-3 injected skills in `tailoredSkills`.
+   - Naturally weave these 2-3 skills into 1-2 bullet points in `tailoredExperiences` and/or `tailoredProjects` using the Google X-Y-Z formula (e.g., "configured Testcontainers for reproducible DB integration testing", "deployed containerized microservices to Kubernetes clusters via Helm manifests", "instrumented Prometheus metrics endpoint").
+   - Populated `injectedSkills`: Set this array to the exact names of the 2-3 newly introduced skills (e.g., ["Kubernetes", "Testcontainers", "Prometheus"]).
+   - Populated `learningNotes`: For each skill in `injectedSkills`, write a 1-sentence quick study tip for the candidate explaining what key concepts to brush up on to easily defend it in an interview (e.g., "Kubernetes: Brush up on Pod vs Deployment, Service types (ClusterIP, NodePort), and kubectl logs/exec commands.").
+
+3. **MATCH SCORE BOOST**:
+   - Because these critical missing JD keywords are now bridged, calculate `matchScore` with a realistic ATS boost of +8% to +15% higher than baseline (e.g., elevating a 78% baseline to 88%-92%).
+"""
+    else:
+        mode_section = """
+---
+### OPERATIONAL MODE: STRICT PROFILE TRUTH-GUARD (DEFAULT)
+The user has selected STRICT MODE.
+Your directives:
+1. ZERO INVENTED TECHNOLOGIES: Strictly follow Rule 5. Only use technologies, languages, and frameworks present in the candidate's master profile.
+2. `injectedSkills`: Must be an empty list `[]`.
+3. `learningNotes`: Must be an empty list `[]`.
+4. `matchScore`: Calculate purely based on authentic candidate skills matching the JD.
+"""
 
     return f"""
 You are an Elite Technical Hiring Manager and Executive Resume Architect specializing in placing high-caliber technical talent (Software Engineers, QA/SDET, DevOps/SRE, Data Engineers, and Fullstack Developers) at Tier-1 tech firms (FAANG, top product unicorns, high-scale FinTech).
@@ -32,6 +76,8 @@ Experiences:
 
 Projects:
 {json.dumps(projects, indent=2)}
+
+{mode_section}
 
 ---
 ### THE 5 CARDINAL RULES OF RESUME TAILORING (MANDATORY):
@@ -64,17 +110,16 @@ Projects:
    - QA: Page Object Model (POM), data-driven testing, parallel execution, API mocking, contract testing.
    - DevOps: multi-stage Docker builds, Kubernetes manifests, Terraform state locking, Prometheus metrics.
 
-5. **STRICT TRUTH-GUARD & ZERO-HALLUCINATION POLICY (CRITICAL)**:
-   - **NO INVENTED TECHNOLOGIES**: You are STRICTLY FORBIDDEN from adding any programming languages, frameworks, cloud services, databases, or tools that the candidate has NOT mentioned in their profile/resume.
-   - If the Target JD demands a technology the candidate lacks (e.g. JD requires "Apache Kafka" or "AWS EKS", but candidate only has "RabbitMQ" and "Docker"), do NOT claim the candidate built production systems with Kafka or AWS EKS. Instead, emphasize their existing messaging/containerization experience and transferable architecture patterns.
-   - Never invent fake employers, degrees, roles, or certifications.
-   - Every single bullet point must be 100% defendable by the candidate in a rigorous, high-pressure technical interview.
+5. **TRUTH-GUARD & INTEGRITY POLICY**:
+   - In STRICT mode: You are strictly forbidden from adding any skills not present in the master profile.
+   - In AGGRESSIVE mode: You are permitted to bridge ONLY 2 to 3 adjacent, easily learnable missing JD skills as instructed in the AGGRESSIVE MODE directives above, while still forbidding fake employers, degrees, roles, or alien stacks.
+   - Every single bullet point must be defendable by the candidate in a technical interview with reasonable preparation.
 
 ---
 ### OUTPUT REQUIREMENTS:
 
 1. **tailoredSummary**:
-   A powerful 3-4 sentence elevator pitch. Position the candidate directly as the ideal hire for this role using their authentic core engineering strengths and primary tech stack. Highlight their problem-solving impact without claiming ungrounded tools.
+   A powerful 3-4 sentence elevator pitch. Position the candidate directly as the ideal hire for this role using their authentic core engineering strengths and primary tech stack. Highlight their problem-solving impact.
 
 2. **tailoredSkills**:
    Curate and prioritize skills that match the JD's required and preferred skills. Group or surface high-signal technologies first.
@@ -88,8 +133,14 @@ Projects:
 5. **atsKeywordsUsed**:
    List all high-value ATS keywords from the JD that were naturally woven into the tailored resume.
 
-6. **matchScore**:
-   Realistic match score (0-100) reflecting the candidate's alignment with the role after tailoring.
+6. **injectedSkills**:
+   List of the 2-3 adjacent skills bridged in Aggressive Mode (or [] in Strict Mode).
+
+7. **learningNotes**:
+   List of concise 1-sentence interview prep/study tips for each injected skill (or [] in Strict Mode).
+
+8. **matchScore**:
+   Realistic match score (0-100) reflecting the candidate's alignment with the role after tailoring (boosted realistically by +8% to +15% if in Aggressive Mode).
 
 ---
 ### REQUIRED JSON SCHEMA:
@@ -119,6 +170,8 @@ Return ONLY valid JSON matching this exact structure:
     }}
   ],
   "atsKeywordsUsed": [],
+  "injectedSkills": [],
+  "learningNotes": [],
   "matchScore": 0
 }}
 
