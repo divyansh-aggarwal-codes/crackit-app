@@ -603,10 +603,20 @@ class ResumePdfService:
         for cat, names in sorted_skill_tuples:
             skills_html += f'<div class="skill-row"><span class="skill-cat">{cat}:</span> <span class="skill-val">{", ".join(names)}</span></div>'
 
-        # Strict 1-page limits: cap bullets so entire resume fits comfortably on single page
-        max_exp_bullets = 2 if len(experiences) >= 3 else 3
+        # Smart dynamic 1-page density:
+        # If candidate has only 1 role, give 5 bullets to fill the page; if 2 roles, 3-4 bullets; if 3+, 2-3 bullets.
+        num_exp = len(experiences)
+        if num_exp <= 1:
+            max_exp_bullets = 5
+        elif num_exp == 2:
+            max_exp_bullets = 4
+        else:
+            max_exp_bullets = 3
+
+        num_proj = len(projects)
+        max_proj_bullets = 3 if num_proj <= 1 else 2
         exp_html  = self._exp_html(experiences, max_bullets=max_exp_bullets)
-        proj_html = self._proj_html(projects, max_projects=2, max_bullets=2)
+        proj_html = self._proj_html(projects, max_projects=2, max_bullets=max_proj_bullets)
         edu_html  = self._edu_html(education)
 
         def section(title, body):
