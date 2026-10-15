@@ -83,6 +83,11 @@ public interface DiscoveredJobRepository extends JpaRepository<DiscoveredJob, St
     @Query("SELECT d FROM DiscoveredJob d WHERE (d.isActive IS NULL OR d.isActive = true) ORDER BY COALESCE(d.fetchedAt, d.postedAt, CURRENT_TIMESTAMP) DESC")
     List<DiscoveredJob> findTop150ActiveJobs();
 
+    default List<DiscoveredJob> findTop10ActiveJobs() {
+        List<DiscoveredJob> list = findTop150ActiveJobs();
+        return list.size() > 10 ? list.subList(0, 10) : list;
+    }
+
     default List<DiscoveredJob> findTop150ByIsActiveTrueOrderByFetchedAtDesc() {
         return findTop150ActiveJobs();
     }

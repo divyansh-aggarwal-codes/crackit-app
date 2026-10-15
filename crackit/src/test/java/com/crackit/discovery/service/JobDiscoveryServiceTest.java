@@ -125,14 +125,8 @@ class JobDiscoveryServiceTest {
                 .fetchedAt(LocalDateTime.now().minusHours(5))
                 .build();
 
-        // When searching by keyword or tokens (e.g. "backend", "java")
-        when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenAnswer(invocation -> {
-            String kw = invocation.getArgument(0, String.class).toLowerCase();
-            if (kw.contains("backend") || kw.contains("java")) {
-                return List.of(job1, job2);
-            }
-            return List.of();
-        });
+        // Bulk active catalog lookup
+        when(discoveredJobRepository.findTop150ActiveJobs()).thenReturn(List.of(job1, job2));
 
         when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job1), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
@@ -194,7 +188,7 @@ class JobDiscoveryServiceTest {
 
         when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(List.of(dismissedInteraction));
 
-        when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(dismissedJob, validJob));
+        when(discoveredJobRepository.findTop150ActiveJobs()).thenReturn(List.of(dismissedJob, validJob));
 
         when(resumeMatchService.calculateTier1Score(eq(testUser), eq(validJob), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
@@ -214,7 +208,6 @@ class JobDiscoveryServiceTest {
     @DisplayName("getCached should return top 6 recommendations for the user")
     void testGetCachedReturnsTopRecommendations() {
         when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
-        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
         when(skillRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
 
         DiscoveredJob job = DiscoveredJob.builder()
@@ -225,20 +218,13 @@ class JobDiscoveryServiceTest {
                 .isActive(true)
                 .build();
 
-        when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(job));
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), any(), anyInt(), anyBoolean())).thenReturn(
-                ResumeMatchService.MatchResult.builder()
-                        .matchScore(90)
-                        .matchedSkills(List.of("Java", "MySQL"))
-                        .missingSkills(List.of())
-                        .build()
-        );
+        when(discoveredJobRepository.findTop10ActiveJobs()).thenReturn(List.of(job));
 
         List<DiscoveredJobDto> cachedJobs = jobDiscoveryService.getCached();
 
         assertEquals(1, cachedJobs.size());
         assertEquals("Razorpay", cachedJobs.get(0).getCompany());
-        assertEquals(90, cachedJobs.get(0).getMatchScore());
+        assertNotNull(cachedJobs.get(0).getMatchScore());
     }
 
     @Test

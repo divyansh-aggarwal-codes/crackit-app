@@ -108,23 +108,11 @@ const isMobile = screenWidth < 768
     setRecLoading(true)
     api.get('/api/jobs/discover/cached')
       .then(res => {
-        const jobs = res.data || []
-        if (jobs.length > 0) {
-          setRecommendedJobs(jobs.slice(0, 5))
-          setRecLoading(false)
-        } else {
-          return api.get('/api/jobs/discover/recommended')
-            .then(recRes => {
-              setRecommendedJobs((recRes.data || []).slice(0, 5))
-            })
-            .finally(() => setRecLoading(false))
-        }
+        setRecommendedJobs((res.data || []).slice(0, 5))
       })
-      .catch(() => {
-        api.get('/api/jobs/discover/recommended')
-          .then(recRes => setRecommendedJobs((recRes.data || []).slice(0, 5)))
-          .catch(() => {})
-          .finally(() => setRecLoading(false))
+      .catch(() => {})
+      .finally(() => {
+        setRecLoading(false)
       })
   }, [])
 
