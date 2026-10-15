@@ -129,14 +129,23 @@ public class ResumeMatchService {
         if (user == null || job == null) {
             return MatchResult.builder().matchScore(50).matchedSkills(List.of()).missingSkills(List.of()).build();
         }
+        List<Skill> userSkills = skillRepository != null ? skillRepository.findByUserId(user.getId()) : List.of();
+        int candidateExp = resolveCandidateExperience(user);
+        return calculateTier1Score(user, job, userSkills, candidateExp, enableStageB);
+    }
+
+    public MatchResult calculateTier1Score(User user, DiscoveredJob job, List<Skill> userSkills, int candidateExp, boolean enableStageB) {
+        if (user == null || job == null) {
+            return MatchResult.builder().matchScore(50).matchedSkills(List.of()).missingSkills(List.of()).build();
+        }
 
         String jobTitle = (job.getTitle() != null ? job.getTitle() : "").toLowerCase();
         String jobDesc = (job.getDescription() != null ? job.getDescription() : "").toLowerCase();
         String fullJobCorpus = jobTitle + " " + jobDesc;
 
         // 1. Ingest Candidate Profile
-        List<Skill> userSkills = skillRepository != null ? skillRepository.findByUserId(user.getId()) : List.of();
-        Set<String> userSkillSet = userSkills.stream()
+        List<Skill> safeSkills = userSkills != null ? userSkills : List.of();
+        Set<String> userSkillSet = safeSkills.stream()
                 .map(s -> s.getSkillName().toLowerCase().trim())
                 .filter(s -> !s.isBlank())
                 .collect(Collectors.toSet());
@@ -144,8 +153,6 @@ public class ResumeMatchService {
         String targetRole = user.getTargetRole() != null && !user.getTargetRole().isBlank()
                 ? user.getTargetRole().toLowerCase().trim()
                 : (user.getCurrentRole() != null ? user.getCurrentRole().toLowerCase().trim() : "software engineer");
-
-        int candidateExp = resolveCandidateExperience(user);
 
         // 2. Classify Candidate Domain and Job Domain
         TechDomain candidateDomain = detectDomain(targetRole, userSkillSet);
@@ -406,7 +413,7 @@ public class ResumeMatchService {
         return false;
     }
 
-    private int resolveCandidateExperience(User user) {
+    public int resolveCandidateExperience(User user) {
         if (user.getYearsExperience() != null && user.getYearsExperience() > 0) {
             return user.getYearsExperience();
         }

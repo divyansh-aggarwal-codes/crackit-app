@@ -98,7 +98,7 @@ class JobDiscoveryServiceTest {
     @DisplayName("getRecommended should retrieve candidates via token search and return scored jobs without remote scraping")
     void testGetRecommendedNonBlockingAndTokenAware() {
         when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
-        when(userJobInteractionRepository.findDismissedJobIdsByUserId("user-1")).thenReturn(Collections.emptyList());
+        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
 
         Skill javaSkill = Skill.builder().id("s-1").skillName("Java").proficiencyLevel("Expert").build();
         when(skillRepository.findByUserId("user-1")).thenReturn(List.of(javaSkill));
@@ -134,25 +134,18 @@ class JobDiscoveryServiceTest {
             return List.of();
         });
 
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job1), anyBoolean())).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job1), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(92)
                         .matchedSkills(List.of("Java", "Microservices"))
                         .missingSkills(List.of())
                         .build()
         );
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job2), anyBoolean())).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job2), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(88)
                         .matchedSkills(List.of("Java", "Distributed Systems"))
                         .missingSkills(List.of())
-                        .build()
-        );
-
-        when(resumeMatchService.recordInteraction(any(), any(), any(), any())).thenAnswer(invocation ->
-                UserJobInteraction.builder()
-                        .id("uji-1")
-                        .status("NEW")
                         .build()
         );
 
@@ -176,7 +169,6 @@ class JobDiscoveryServiceTest {
     @DisplayName("getRecommended should exclude dismissed jobs")
     void testGetRecommendedExcludesDismissedJobs() {
         when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
-        when(userJobInteractionRepository.findDismissedJobIdsByUserId("user-1")).thenReturn(List.of("job-dismissed-1"));
         when(skillRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
 
         DiscoveredJob dismissedJob = DiscoveredJob.builder()
@@ -193,17 +185,23 @@ class JobDiscoveryServiceTest {
                 .isActive(true)
                 .build();
 
+        UserJobInteraction dismissedInteraction = UserJobInteraction.builder()
+                .id("uji-dismissed")
+                .user(testUser)
+                .discoveredJob(dismissedJob)
+                .status("DISMISSED")
+                .build();
+
+        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(List.of(dismissedInteraction));
+
         when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(dismissedJob, validJob));
 
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(validJob), anyBoolean())).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(validJob), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(85)
                         .matchedSkills(List.of("Java"))
                         .missingSkills(List.of())
                         .build()
-        );
-        when(resumeMatchService.recordInteraction(any(), any(), any(), any())).thenAnswer(invocation ->
-                UserJobInteraction.builder().id("uji-2").status("NEW").build()
         );
 
         List<DiscoveredJobDto> recommendations = jobDiscoveryService.getRecommended();
@@ -216,7 +214,7 @@ class JobDiscoveryServiceTest {
     @DisplayName("getCached should return top 6 recommendations for the user")
     void testGetCachedReturnsTopRecommendations() {
         when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
-        when(userJobInteractionRepository.findDismissedJobIdsByUserId("user-1")).thenReturn(Collections.emptyList());
+        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
         when(skillRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
 
         DiscoveredJob job = DiscoveredJob.builder()
@@ -228,15 +226,12 @@ class JobDiscoveryServiceTest {
                 .build();
 
         when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(job));
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), anyBoolean())).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), any(), anyInt(), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(90)
                         .matchedSkills(List.of("Java", "MySQL"))
                         .missingSkills(List.of())
                         .build()
-        );
-        when(resumeMatchService.recordInteraction(any(), any(), any(), any())).thenAnswer(invocation ->
-                UserJobInteraction.builder().id("uji-3").status("NEW").build()
         );
 
         List<DiscoveredJobDto> cachedJobs = jobDiscoveryService.getCached();

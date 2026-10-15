@@ -13,6 +13,8 @@ public interface UserJobInteractionRepository extends JpaRepository<UserJobInter
 
     Optional<UserJobInteraction> findByUserIdAndDiscoveredJobId(String userId, String discoveredJobId);
 
+    List<UserJobInteraction> findByUserId(String userId);
+
     List<UserJobInteraction> findByUserIdAndStatus(String userId, String status);
 
     @Query("SELECT uji FROM UserJobInteraction uji WHERE uji.user.id = :userId AND uji.status != 'DISMISSED' ORDER BY uji.matchScore DESC")

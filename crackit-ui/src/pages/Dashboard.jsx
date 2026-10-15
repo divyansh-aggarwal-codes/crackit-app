@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [showScan, setShowScan] = useState(false)
   const [resumeStrength, setResumeStrength] = useState(null)
   const [recommendedJobs, setRecommendedJobs] = useState([])
+  const [recLoading, setRecLoading] = useState(true)
   const [currentRoadmap, setCurrentRoadmap] = useState(null)
   const [animateBars, setAnimateBars] = useState(false)
   const [applyingJob, setApplyingJob] = useState(null)
@@ -104,9 +105,27 @@ const isMobile = screenWidth < 768
   }, [])
 
   useEffect(() => {
+    setRecLoading(true)
     api.get('/api/jobs/discover/cached')
-      .then(res => setRecommendedJobs((res.data || []).slice(0, 5)))
-      .catch(() => {})
+      .then(res => {
+        const jobs = res.data || []
+        if (jobs.length > 0) {
+          setRecommendedJobs(jobs.slice(0, 5))
+          setRecLoading(false)
+        } else {
+          return api.get('/api/jobs/discover/recommended')
+            .then(recRes => {
+              setRecommendedJobs((recRes.data || []).slice(0, 5))
+            })
+            .finally(() => setRecLoading(false))
+        }
+      })
+      .catch(() => {
+        api.get('/api/jobs/discover/recommended')
+          .then(recRes => setRecommendedJobs((recRes.data || []).slice(0, 5)))
+          .catch(() => {})
+          .finally(() => setRecLoading(false))
+      })
   }, [])
 
   const today = new Date().toLocaleDateString('en-US', {
@@ -765,121 +784,208 @@ maxHeight: isMobile ? 'none' : 410,
 overflowY: isMobile ? 'visible' : 'auto',
     paddingRight: 4
   }}>
-    {recommendedJobs.slice(0, 5).map((job, i) => (
-      <div
-        key={job.id || i}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.boxShadow = '0 10px 22px rgba(124,58,237,0.08)'
-          e.currentTarget.style.borderColor = 'rgba(124,58,237,0.22)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.boxShadow = 'none'
-          e.currentTarget.style.borderColor = 'rgba(124,58,237,0.10)'
-        }}
-        style={{
-          padding: '13px 14px',
-          borderRadius: 16,
-          background: '#faf8ff',
-          border: '1px solid rgba(124,58,237,0.10)',
-          transition: 'all 0.18s ease',
-          cursor: 'pointer'
-        }}
-        onClick={() => handleApplyClick(job)}
-      >
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 11
-        }}>
+    {recLoading ? (
+      [1, 2, 3].map(n => (
+        <div
+          key={n}
+          style={{
+            padding: '13px 14px',
+            borderRadius: 16,
+            background: '#faf8ff',
+            border: '1px solid rgba(124,58,237,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 11,
+            opacity: 0.75
+          }}
+        >
           <div style={{
             width: 38,
             height: 38,
             borderRadius: 13,
-            background: 'rgba(124,58,237,0.10)',
-            color: '#7c3aed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 800,
+            background: 'rgba(124,58,237,0.12)',
             flexShrink: 0
-          }}>
-            {(job.company || job.companyName || '?').charAt(0).toUpperCase()}
-          </div>
-
-          <div style={{ minWidth: 0, flex: 1 }}>
+          }} />
+          <div style={{ flex: 1 }}>
             <div style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 8
-            }}>
-              <div style={{
-                fontSize: 13.5,
-                fontWeight: 800,
-                color: '#1a1040',
-                lineHeight: 1.35
-              }}>
-                {job.title}
-              </div>
-
-            </div>
-
+              width: '70%',
+              height: 14,
+              borderRadius: 6,
+              background: 'rgba(124,58,237,0.14)',
+              marginBottom: 8
+            }} />
             <div style={{
-              fontSize: 12.5,
-              color: '#7c3aed',
-              marginTop: 4,
-              fontWeight: 600
-            }}>
-              {job.company || job.companyName}
-            </div>
-
-            {job.location && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11.5,
-                color: '#a094c4',
-                marginTop: 5
-              }}>
-                <i className="ti ti-map-pin" style={{ fontSize: 12 }} />
-                <span>{job.location}</span>
-              </div>
-            )}
-
-            {(job.url || job.applyUrl) && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation()
-                  handleApplyClick(job)
-                }}
-                style={{
-                  marginTop: 9,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 12,
-                  color: '#7c3aed',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  textDecoration: 'none',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                <i className="ti ti-external-link" style={{ fontSize: 12 }} />
-                Apply / View job
-              </button>
-            )}
+              width: '45%',
+              height: 10,
+              borderRadius: 4,
+              background: 'rgba(124,58,237,0.08)'
+            }} />
           </div>
         </div>
+      ))
+    ) : recommendedJobs.length === 0 ? (
+      <div style={{
+        padding: '28px 16px',
+        textAlign: 'center',
+        background: '#faf8ff',
+        borderRadius: 16,
+        border: '1px dashed rgba(124,58,237,0.22)'
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>💼</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1a1040', marginBottom: 4 }}>
+          Discovering matches for your profile...
+        </div>
+        <div style={{ fontSize: 12, color: '#7c3aed', marginBottom: 14 }}>
+          Explore hundreds of active tech openings curated from top career portals.
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/discover')}
+          style={{
+            padding: '7px 16px',
+            borderRadius: 10,
+            background: '#7c3aed',
+            color: '#fff',
+            border: 'none',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+        >
+          Explore Openings →
+        </button>
       </div>
-    ))}
+    ) : (
+      recommendedJobs.slice(0, 5).map((job, i) => (
+        <div
+          key={job.id || i}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+            e.currentTarget.style.boxShadow = '0 10px 22px rgba(124,58,237,0.08)'
+            e.currentTarget.style.borderColor = 'rgba(124,58,237,0.22)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = 'none'
+            e.currentTarget.style.borderColor = 'rgba(124,58,237,0.10)'
+          }}
+          style={{
+            padding: '13px 14px',
+            borderRadius: 16,
+            background: '#faf8ff',
+            border: '1px solid rgba(124,58,237,0.10)',
+            transition: 'all 0.18s ease',
+            cursor: 'pointer'
+          }}
+          onClick={() => handleApplyClick(job)}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 11
+          }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 13,
+              background: 'rgba(124,58,237,0.10)',
+              color: '#7c3aed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 14,
+              fontWeight: 800,
+              flexShrink: 0
+            }}>
+              {(job.company || job.companyName || '?').charAt(0).toUpperCase()}
+            </div>
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 8
+              }}>
+                <div style={{
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  color: '#1a1040',
+                  lineHeight: 1.35
+                }}>
+                  {job.title}
+                </div>
+
+                {job.matchScore && (
+                  <span style={{
+                    padding: '2px 7px',
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: job.matchScore >= 80 ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.12)',
+                    color: job.matchScore >= 80 ? '#059669' : '#7c3aed',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
+                  }}>
+                    {job.matchScore}% Match
+                  </span>
+                )}
+              </div>
+
+              <div style={{
+                fontSize: 12.5,
+                color: '#7c3aed',
+                marginTop: 4,
+                fontWeight: 600
+              }}>
+                {job.company || job.companyName}
+              </div>
+
+              {job.location && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11.5,
+                  color: '#a094c4',
+                  marginTop: 5
+                }}>
+                  <i className="ti ti-map-pin" style={{ fontSize: 12 }} />
+                  <span>{job.location}</span>
+                </div>
+              )}
+
+              {(job.url || job.applyUrl) && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation()
+                    handleApplyClick(job)
+                  }}
+                  style={{
+                    marginTop: 9,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: 12,
+                    color: '#7c3aed',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <i className="ti ti-external-link" style={{ fontSize: 12 }} />
+                  Apply / View job
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))
+    )}
   </div>
 
   <button onClick={() => navigate('/discover')} style={{
