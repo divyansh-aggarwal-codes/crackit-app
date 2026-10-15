@@ -44,7 +44,7 @@ public class JobDiscoveryController {
 
     @PostMapping("/sync")
     public ResponseEntity<Map<String, String>> triggerSync() {
-        jobDiscoveryService.scheduledFetch();
-        return ResponseEntity.ok(Map.of("message", "Multi-provider job discovery synchronization triggered"));
+        java.util.concurrent.CompletableFuture.runAsync(jobDiscoveryService::scheduledFetch);
+        return ResponseEntity.ok(Map.of("message", "Multi-provider job discovery synchronization triggered in background"));
     }
 }

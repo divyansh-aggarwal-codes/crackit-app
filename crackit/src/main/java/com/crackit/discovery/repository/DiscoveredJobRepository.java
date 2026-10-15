@@ -73,4 +73,12 @@ public interface DiscoveredJobRepository extends JpaRepository<DiscoveredJob, St
     List<DiscoveredJob> cacheFallback(
             @Param("keyword") String keyword
     );
+
+    @Query("SELECT d FROM DiscoveredJob d WHERE d.isActive = true AND (" +
+            "LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(d.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY d.fetchedAt DESC")
+    List<DiscoveredJob> searchActiveByKeyword(@Param("keyword") String keyword);
+
+    List<DiscoveredJob> findTop150ByIsActiveTrueOrderByFetchedAtDesc();
 }

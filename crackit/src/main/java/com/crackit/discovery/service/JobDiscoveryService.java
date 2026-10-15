@@ -55,7 +55,7 @@ public class JobDiscoveryService {
 
     // ─── Dynamic Scheduled Fetch across User Target Roles ────────────────────
     @CacheEvict(value = "discoveredJobs", allEntries = true)
-    @Scheduled(fixedDelay = 3600000)
+    @Scheduled(fixedDelay = 3600000, initialDelay = 15000)
     public void scheduledFetch() {
         log.info("[JOB DISCOVERY ENGINE] Running scheduled multi-provider job discovery fetch...");
 
@@ -103,8 +103,11 @@ public class JobDiscoveryService {
     }
 
     private void preScoreForActiveUsers(List<User> users) {
-        LocalDateTime since = LocalDateTime.now().minusHours(24);
+        LocalDateTime since = LocalDateTime.now().minusDays(7);
         List<DiscoveredJob> recentJobs = discoveredJobRepository.findActiveJobsSince(since);
+        if (recentJobs.isEmpty()) {
+            recentJobs = discoveredJobRepository.findTop150ByIsActiveTrueOrderByFetchedAtDesc();
+        }
 
         for (User user : users) {
             for (DiscoveredJob job : recentJobs) {
@@ -122,59 +125,89 @@ public class JobDiscoveryService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String location = "India";
-        if ("Remote".equalsIgnoreCase(user.getPreferredWorkMode())) {
-            location = "Remote";
-        } else if (user.getPreferredLocations() != null && !user.getPreferredLocations().isBlank()) {
-            location = user.getPreferredLocations().split("[,;/]")[0].trim();
-        } else if (user.getLocation() != null && !user.getLocation().isBlank()) {
-            location = user.getLocation().trim();
-        }
-
-        List<String> keywords = buildKeywords(user);
-        log.info("Fetching recommended jobs for keywords: {}, location: {}", keywords, location);
-
-        for (String keyword : keywords) {
-            fetchAndStore(keyword, location);
-        }
-
-        LocalDateTime since = LocalDateTime.now().minusHours(48);
-        List<DiscoveredJob> candidates = new ArrayList<>();
-        for (String keyword : keywords) {
-            List<DiscoveredJob> found = discoveredJobRepository.searchFreshByKeyword(keyword, since);
-            for (DiscoveredJob job : found) {
-                if (Boolean.TRUE.equals(job.getIsActive()) && candidates.stream().noneMatch(c -> c.getId().equals(job.getId()))) {
-                    candidates.add(job);
-                }
-            }
-        }
-
         // Filter out dismissed jobs
         List<String> dismissedJobIds = userJobInteractionRepository.findDismissedJobIdsByUserId(user.getId());
         Set<String> dismissedSet = new HashSet<>(dismissedJobIds);
 
-        List<DiscoveredJobDto> dtos = new ArrayList<>();
-        for (DiscoveredJob job : candidates) {
-            if (dismissedSet.contains(job.getId())) continue;
+        // Build Candidate Pool from database without synchronous network blocking
+        Set<DiscoveredJob> candidatePool = new LinkedHashSet<>();
 
+        // 1. Gather search keywords/tokens from user profile
+        List<String> keywords = buildKeywords(user);
+        for (String kw : keywords) {
+            if (kw == null || kw.isBlank()) continue;
+            String trimmedKw = kw.trim();
+
+            // Direct active keyword match
+            List<DiscoveredJob> found = discoveredJobRepository.searchActiveByKeyword(trimmedKw);
+            for (DiscoveredJob job : found) {
+                if (!dismissedSet.contains(job.getId())) {
+                    candidatePool.add(job);
+                }
+            }
+
+            // Sub-token decomposition (e.g. "Senior Java Backend Engineer" -> "java", "backend")
+            String[] tokens = trimmedKw.split("\\s+");
+            if (tokens.length > 1) {
+                for (String t : tokens) {
+                    if (t.length() >= 4 && !t.equalsIgnoreCase("developer") && !t.equalsIgnoreCase("engineer") && !t.equalsIgnoreCase("senior")) {
+                        List<DiscoveredJob> tokenMatches = discoveredJobRepository.searchActiveByKeyword(t);
+                        for (DiscoveredJob job : tokenMatches) {
+                            if (!dismissedSet.contains(job.getId())) {
+                                candidatePool.add(job);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Supplement candidate pool with top candidate skills
+        List<Skill> userSkills = skillRepository.findByUserId(user.getId());
+        for (Skill s : userSkills) {
+            if (s.getSkillName() != null && s.getSkillName().length() >= 3) {
+                List<DiscoveredJob> skillMatches = discoveredJobRepository.searchActiveByKeyword(s.getSkillName().trim());
+                for (DiscoveredJob job : skillMatches) {
+                    if (!dismissedSet.contains(job.getId())) {
+                        candidatePool.add(job);
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: If candidate pool is still small (< 30), backfill with top active jobs from the catalog
+        if (candidatePool.size() < 30) {
+            List<DiscoveredJob> topActive = discoveredJobRepository.findTop150ByIsActiveTrueOrderByFetchedAtDesc();
+            for (DiscoveredJob job : topActive) {
+                if (!dismissedSet.contains(job.getId())) {
+                    candidatePool.add(job);
+                }
+            }
+        }
+
+        // 4. Personalized scoring using ResumeMatchService
+        List<DiscoveredJobDto> dtos = new ArrayList<>();
+        for (DiscoveredJob job : candidatePool) {
             ResumeMatchService.MatchResult match = resumeMatchService.calculateTier1Score(user, job);
             UserJobInteraction interaction = resumeMatchService.recordInteraction(user, job, match, null);
 
-            dtos.add(toDto(job, match.getMatchScore(), match.getMatchedSkills(), match.getMissingSkills(), interaction.getStatus()));
+            // Only recommend jobs with sensible alignment (matchScore >= 40)
+            if (match.getMatchScore() >= 40) {
+                dtos.add(toDto(job, match.getMatchScore(), match.getMatchedSkills(), match.getMissingSkills(), interaction.getStatus()));
+            }
         }
 
-        // Sort by match score DESC, with official career pages prioritized
+        // 5. Sort by match score DESC, prioritizing official ATS career pages on score ties, then fetchedAt DESC
         return dtos.stream()
                 .sorted(Comparator.comparing(DiscoveredJobDto::getMatchScore, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(j -> "CAREER_PAGE_ATS".equals(j.getSourceType()) ? 0 : 1))
+                        .thenComparing(j -> "CAREER_PAGE_ATS".equals(j.getSourceType()) ? 0 : 1)
+                        .thenComparing(DiscoveredJobDto::getFetchedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(25)
                 .collect(Collectors.toList());
     }
 
     // ─── Manual Search with Filter Controls ──────────────────────────────────
     public List<DiscoveredJobDto> search(String keyword, String location, Integer minScore, String sourceType) {
-        fetchAndStore(keyword, location);
-
         User user = null;
         try {
             String email = AuthUtil.getLoggedInUserEmail();
@@ -183,17 +216,43 @@ public class JobDiscoveryService {
             }
         } catch (Exception ignored) {}
 
-        LocalDateTime since = LocalDateTime.now().minusHours(48);
-        List<DiscoveredJob> matchedJobs = discoveredJobRepository.searchFreshByKeyword(keyword, since);
-
         Set<String> dismissedSet = (user != null)
                 ? new HashSet<>(userJobInteractionRepository.findDismissedJobIdsByUserId(user.getId()))
                 : Collections.emptySet();
+
+        // 1. Search active jobs matching keyword directly from database
+        Set<DiscoveredJob> matchedJobs = new LinkedHashSet<>();
+        if (keyword != null && !keyword.isBlank()) {
+            matchedJobs.addAll(discoveredJobRepository.searchActiveByKeyword(keyword.trim()));
+
+            // Token search fallback if phrase returns few results
+            if (matchedJobs.size() < 10) {
+                String[] tokens = keyword.trim().split("\\s+");
+                if (tokens.length > 1) {
+                    for (String t : tokens) {
+                        if (t.length() >= 3 && !t.equalsIgnoreCase("and") && !t.equalsIgnoreCase("the")) {
+                            matchedJobs.addAll(discoveredJobRepository.searchActiveByKeyword(t));
+                        }
+                    }
+                }
+            }
+        } else {
+            matchedJobs.addAll(discoveredJobRepository.findTop150ByIsActiveTrueOrderByFetchedAtDesc());
+        }
 
         List<DiscoveredJobDto> dtos = new ArrayList<>();
         for (DiscoveredJob job : matchedJobs) {
             if (!Boolean.TRUE.equals(job.getIsActive())) continue;
             if (dismissedSet.contains(job.getId())) continue;
+
+            // Location filter if specified
+            if (location != null && !location.isBlank() && !"All".equalsIgnoreCase(location) && !"India".equalsIgnoreCase(location)) {
+                boolean remote = Boolean.TRUE.equals(job.getRemote());
+                boolean remotePref = "remote".equalsIgnoreCase(location.trim());
+                if (!jobUrlNormalizer.isLocationEligible(location, remotePref, job.getLocation(), remote)) {
+                    continue;
+                }
+            }
 
             // Filter by sourceType if specified
             if (sourceType != null && !sourceType.isBlank() && !"ALL".equalsIgnoreCase(sourceType)) {
@@ -226,7 +285,8 @@ public class JobDiscoveryService {
 
         return dtos.stream()
                 .sorted(Comparator.comparing(DiscoveredJobDto::getMatchScore, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(j -> "CAREER_PAGE_ATS".equals(j.getSourceType()) ? 0 : 1))
+                        .thenComparing(j -> "CAREER_PAGE_ATS".equals(j.getSourceType()) ? 0 : 1)
+                        .thenComparing(DiscoveredJobDto::getFetchedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
     }
 
@@ -450,39 +510,17 @@ public class JobDiscoveryService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String role = user.getCurrentRole() != null && !user.getCurrentRole().isBlank()
-                ? user.getCurrentRole().trim().toLowerCase()
-                : "software engineer";
-
-        return self.getCachedJobsForRole(role);
+        return self.getCachedJobsForUser(user.getId());
     }
 
-    @Cacheable(value = "discoveredJobs", key = "#role")
+    @Cacheable(value = "discoveredJobs", key = "#userId")
+    public List<DiscoveredJobDto> getCachedJobsForUser(String userId) {
+        log.info("[CACHE MISS] Loading fresh personalized recommended jobs for user: '{}'", userId);
+        return getRecommended().stream().limit(6).collect(Collectors.toList());
+    }
+
     public List<DiscoveredJobDto> getCachedJobsForRole(String role) {
-        log.info("[CACHE MISS] Querying database for role: '{}'", role);
-        LocalDateTime since = LocalDateTime.now().minusHours(48);
-
-        List<DiscoveredJob> freshJobs = discoveredJobRepository.searchFreshByKeyword(role, since);
-        List<DiscoveredJob> finalJobs = freshJobs.stream()
-                .filter(j -> Boolean.TRUE.equals(j.getIsActive()))
-                .collect(Collectors.toList());
-
-        if (finalJobs.size() < 6) {
-            List<DiscoveredJob> olderJobs = discoveredJobRepository.cacheFallback(role);
-            Set<String> existingIds = finalJobs.stream().map(DiscoveredJob::getId).collect(Collectors.toSet());
-            olderJobs.stream()
-                    .filter(j -> Boolean.TRUE.equals(j.getIsActive()) && !existingIds.contains(j.getId()))
-                    .forEach(finalJobs::add);
-        }
-
-        return finalJobs.stream()
-                .sorted(Comparator.comparing(
-                        (DiscoveredJob j) -> j.getPostedAt() != null ? j.getPostedAt() : j.getFetchedAt(),
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ).thenComparing(j -> "CAREER_PAGE_ATS".equals(j.getSourceType()) ? 0 : 1))
-                .limit(6)
-                .map(j -> toDto(j, 85, List.of("Java", "Spring Boot"), List.of(), "NEW"))
-                .collect(Collectors.toList());
+        return getRecommended().stream().limit(6).collect(Collectors.toList());
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
