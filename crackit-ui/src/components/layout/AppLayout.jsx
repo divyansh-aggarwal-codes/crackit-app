@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Sidebar from './Sidebar'
 import MobileBottomNav from './MobileBottomNav'
 import UpgradeModal from '../payment/UpgradeModal'
+import NotificationCenter from '../NotificationCenter'
 
 export default function AppLayout() {
   const location = useLocation()
@@ -92,6 +93,9 @@ export default function AppLayout() {
           position: 'relative'
         }}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <NotificationCenter />
+        </div>
         
         <div
           style={{

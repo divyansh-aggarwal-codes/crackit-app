@@ -117,4 +117,11 @@ public class User {
     @Column(name = "ai_usage_count")
     @Builder.Default
     private Integer aiUsageCount = 0;
+
+    @Column(name = "job_alerts_enabled")
+    @Builder.Default
+    private Boolean jobAlertsEnabled = true;
+
+    @Column(name = "unsubscribe_token", length = 64)
+    private String unsubscribeToken;
 }

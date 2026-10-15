@@ -12,6 +12,18 @@ import java.util.Optional;
 public interface DiscoveredJobRepository extends JpaRepository<DiscoveredJob, String> {
     Optional<DiscoveredJob> findByExternalId(String externalId);
 
+    Optional<DiscoveredJob> findByUrlHash(String urlHash);
+
+    Optional<DiscoveredJob> findBySemanticHash(String semanticHash);
+
+    List<DiscoveredJob> findByIsActiveTrue();
+
+    @Query("SELECT d FROM DiscoveredJob d WHERE d.isActive = true AND d.fetchedAt > :since ORDER BY d.fetchedAt DESC")
+    List<DiscoveredJob> findActiveJobsSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT d FROM DiscoveredJob d WHERE d.isActive = true AND (d.lastVerifiedAt IS NULL OR d.lastVerifiedAt < :cutoff)")
+    List<DiscoveredJob> findJobsNeedingVerification(@Param("cutoff") LocalDateTime cutoff);
+
     @Query("SELECT d FROM DiscoveredJob d WHERE " +
             "LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
             "LOWER(d.description) LIKE LOWER(CONCAT('%', :keyword, '%'))")

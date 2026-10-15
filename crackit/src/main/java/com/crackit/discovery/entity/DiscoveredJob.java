@@ -56,4 +56,37 @@ public class DiscoveredJob {
     @CreationTimestamp
     @Column(name = "fetched_at", updatable = false)
     private LocalDateTime fetchedAt;
+
+    @Column(name = "canonical_url", length = 1000)
+    private String canonicalUrl;
+
+    @Column(name = "url_hash", length = 64)
+    private String urlHash;
+
+    @Column(name = "semantic_hash", length = 64)
+    private String semanticHash;
+
+    @Column(name = "source_type", length = 50)
+    @Builder.Default
+    private String sourceType = "API_AGGREGATOR";
+
+    @Column(name = "ats_platform", length = 50)
+    private String atsPlatform;
+
+    @Column(name = "company_domain", length = 150)
+    private String companyDomain;
+
+    @Column(name = "is_active")
+    @Builder.Default
+    private Boolean isActive = true;
+
+    @Column(name = "verification_status", length = 30)
+    @Builder.Default
+    private String verificationStatus = "ACTIVE";
+
+    @Column(name = "last_verified_at")
+    private LocalDateTime lastVerifiedAt;
+
+    @Column(name = "extracted_skills", columnDefinition = "LONGTEXT")
+    private String extractedSkills;
 }

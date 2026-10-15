@@ -23,4 +23,17 @@ public class DiscoveredJobDto {
     private String jobType;
     private LocalDateTime fetchedAt;
     private LocalDateTime postedAt;
+
+    private String canonicalUrl;
+    private String sourceType;
+    private String atsPlatform;
+    private String companyDomain;
+    private Boolean isActive;
+    private String verificationStatus;
+
+    // Candidate match attributes
+    private Integer matchScore;
+    private java.util.List<String> matchedSkills;
+    private java.util.List<String> missingSkills;
+    private String status; // NEW, VIEWED, SAVED, DISMISSED, APPLIED
 }

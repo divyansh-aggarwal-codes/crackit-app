@@ -97,3 +97,13 @@ keepalive:
   enabled: ${KEEPALIVE_ENABLED:true}
   backend-url: ${RENDER_EXTERNAL_URL:https://crackit-backend-4bpr.onrender.com}
 
+mail:
+  enabled: ${MAIL_ENABLED:true}
+  smtp:
+    host: ${MAIL_SMTP_HOST:smtp.gmail.com}
+    port: ${MAIL_SMTP_PORT:587}
+    username: ${MAIL_SMTP_USERNAME:crackit.notifications@gmail.com}
+    password: ${MAIL_SMTP_PASSWORD:xsfsnrbukazpxnas}
+    from: ${MAIL_FROM:crackit.notifications@gmail.com}
+    from-name: ${MAIL_FROM_NAME:CrackIt Job Alerts}
+

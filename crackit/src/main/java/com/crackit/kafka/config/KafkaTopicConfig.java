@@ -12,6 +12,7 @@ public class KafkaTopicConfig {
 
     public static final String INTERVIEW_PREP_TOPIC = "crackit.interview.prep.requests";
     public static final String INTERVIEW_PREP_DLT_TOPIC = "crackit.interview.prep.requests-dlt";
+    public static final String JOB_DISCOVERED_TOPIC = "crackit.job.discovered.events";
 
     @Bean
     public NewTopic interviewPrepTopic() {
@@ -24,6 +25,14 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic interviewPrepDltTopic() {
         return TopicBuilder.name(INTERVIEW_PREP_DLT_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic jobDiscoveredTopic() {
+        return TopicBuilder.name(JOB_DISCOVERED_TOPIC)
                 .partitions(3)
                 .replicas(1)
                 .build();
