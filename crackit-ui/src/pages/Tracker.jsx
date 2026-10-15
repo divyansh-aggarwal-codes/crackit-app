@@ -5,6 +5,7 @@ import StatusBadge from '../components/ui/StatusBadge'
 import { STATUS_ORDER } from '../styles/theme'
 import { TrackerSkeleton } from '../components/Skeletons'
 import PageHeader from '../components/ui/PageHeader'
+import { useToast } from '../components/ui/ToastProvider'
 
 export default function Tracker() {
   const [applications, setApplications] = useState([])
@@ -13,12 +14,22 @@ export default function Tracker() {
   const [loading, setLoading] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [screenWidth, setScreenWidth] = useState(window.innerWidth)
-
+  const { showToast } = useToast()
 
   useEffect(() => {
     api.get('/api/tracker')
       .then(res => setApplications(res.data))
       .finally(() => setPageLoading(false))
+
+    // Check if user was redirected from email 1-click tracking
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tracked') === 'applied') {
+      showToast({
+        type: 'success',
+        message: 'Application successfully added to your pipeline from email! 🎉'
+      })
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   const isTablet = screenWidth < 1250

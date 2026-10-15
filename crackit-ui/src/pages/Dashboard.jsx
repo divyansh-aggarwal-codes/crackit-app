@@ -6,6 +6,8 @@ import Card from '../components/ui/Card'
 import StatusBadge from '../components/ui/StatusBadge'
 import DonutChart from '../components/DonutChart'
 import QuickScanModal from '../components/QuickScanModal'
+import ApplyConfirmModal from '../components/tracker/ApplyConfirmModal'
+import { useToast } from '../components/ui/ToastProvider'
 import { DashboardSkeleton } from '../components/Skeletons'
 import AnimatedNumber from '../components/ui/AnimatedNumber'
 import PageHeader from '../components/ui/PageHeader'
@@ -14,14 +16,38 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null)
   const [loading, setLoading] = useState(true)
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [showScan, setShowScan] = useState(false)
   const [resumeStrength, setResumeStrength] = useState(null)
   const [recommendedJobs, setRecommendedJobs] = useState([])
   const [currentRoadmap, setCurrentRoadmap] = useState(null)
   const [animateBars, setAnimateBars] = useState(false)
+  const [applyingJob, setApplyingJob] = useState(null)
   const navigate = useNavigate()
 
   const [screenWidth, setScreenWidth] = useState(window.innerWidth)
+
+  const fetchDashboard = () => {
+    api.get('/api/tracker/dashboard')
+      .then(res => setDashboard(res.data))
+      .catch(() => {})
+  }
+
+  const handleApplyClick = (job) => {
+    const url = job.url || job.applyUrl
+    if (url) {
+      window.open(url, '_blank')
+    }
+    setApplyingJob(job)
+  }
+
+  const handleTrackSuccess = (trackedApp) => {
+    fetchDashboard()
+    showToast({
+      type: 'success',
+      message: `Added ${trackedApp?.companyName || 'job'} to your pipeline as APPLIED! 🚀`
+    })
+  }
 
 useEffect(() => {
   const handleResize = () => setScreenWidth(window.innerWidth)
@@ -760,6 +786,7 @@ overflowY: isMobile ? 'visible' : 'auto',
           transition: 'all 0.18s ease',
           cursor: 'pointer'
         }}
+        onClick={() => handleApplyClick(job)}
       >
         <div style={{
           display: 'flex',
@@ -824,11 +851,12 @@ overflowY: isMobile ? 'visible' : 'auto',
             )}
 
             {(job.url || job.applyUrl) && (
-              <a
-                href={job.url || job.applyUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={e => e.stopPropagation()}
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation()
+                  handleApplyClick(job)
+                }}
                 style={{
                   marginTop: 9,
                   display: 'inline-flex',
@@ -836,13 +864,17 @@ overflowY: isMobile ? 'visible' : 'auto',
                   gap: 5,
                   fontSize: 12,
                   color: '#7c3aed',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
                   textDecoration: 'none',
-                  fontWeight: 700
+                  fontWeight: 700,
+                  cursor: 'pointer'
                 }}
               >
                 <i className="ti ti-external-link" style={{ fontSize: 12 }} />
-                View job
-              </a>
+                Apply / View job
+              </button>
             )}
           </div>
         </div>
@@ -1452,6 +1484,13 @@ overflowY: isMobile ? 'visible' : 'auto',
     </div>
   </Card>
 )}
+
+      <ApplyConfirmModal
+        job={applyingJob}
+        isOpen={!!applyingJob}
+        onClose={() => setApplyingJob(null)}
+        onTrackSuccess={handleTrackSuccess}
+      />
     </div>
   )
 }

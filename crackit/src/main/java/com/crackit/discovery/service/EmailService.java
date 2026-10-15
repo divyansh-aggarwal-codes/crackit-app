@@ -57,6 +57,9 @@ public class EmailService {
     @Value("${mail.unsubscribe-url:https://crackit-backend-4bpr.onrender.com/api/public/unsubscribe}")
     private String unsubscribeBaseUrl = "https://crackit-backend-4bpr.onrender.com/api/public/unsubscribe";
 
+    @Value("${mail.track-apply-url:https://crackit-backend-4bpr.onrender.com/api/public/jobs/track-applied}")
+    private String trackApplyBaseUrl = "https://crackit-backend-4bpr.onrender.com/api/public/jobs/track-applied";
+
     /**
      * Sends an HTML email via Gmail SMTP using STARTTLS.
      */
@@ -177,6 +180,10 @@ public class EmailService {
             String location = job.getLocation() != null && !job.getLocation().isBlank() ? job.getLocation() : "Remote / Flexible";
             int score = m.getMatchScore() != null ? m.getMatchScore() : 85;
             String applyUrl = job.getUrl() != null ? job.getUrl() : "https://crackit-app.onrender.com/discover";
+            String trackAppliedUrl = (unsubscribeToken != null && !unsubscribeToken.isBlank() && job.getId() != null)
+                    ? trackApplyBaseUrl + "?jobId=" + java.net.URLEncoder.encode(job.getId(), java.nio.charset.StandardCharsets.UTF_8)
+                    + "&token=" + java.net.URLEncoder.encode(unsubscribeToken.trim(), java.nio.charset.StandardCharsets.UTF_8)
+                    : "https://crackit-app-five.vercel.app/tracker";
 
             List<String> skills = resumeMatchService != null ? resumeMatchService.fromJson(m.getMatchedSkills()) : List.of();
             StringBuilder skillChips = new StringBuilder();
@@ -226,16 +233,25 @@ public class EmailService {
                                 %s
                             </div>
 
-                            <!-- Button -->
-                            <div>
-                                <a href='%s' target='_blank' style='display:inline-block;background-color:#7c3aed;color:#ffffff !important;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;'>
-                                    View & Apply ↗
-                                </a>
-                            </div>
+                            <!-- Action Buttons -->
+                            <table role='presentation' cellpadding='0' cellspacing='0' style='margin-top:4px;'>
+                                <tr>
+                                    <td style='padding-right:8px;vertical-align:middle;'>
+                                        <a href='%s' target='_blank' style='display:inline-block;background-color:#7c3aed;color:#ffffff !important;text-decoration:none;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;'>
+                                            View & Apply ↗
+                                        </a>
+                                    </td>
+                                    <td style='vertical-align:middle;'>
+                                        <a href='%s' target='_blank' style='display:inline-block;background-color:#059669;color:#ffffff !important;text-decoration:none;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;'>
+                                            ✓ Mark as Applied
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
                 </table>
-            """, sourceBadge, score, title, company, location, skillChips.toString(), applyUrl));
+            """, sourceBadge, score, title, company, location, skillChips.toString(), applyUrl, trackAppliedUrl));
         }
 
         String unsubLink = (unsubscribeToken != null && !unsubscribeToken.isBlank())

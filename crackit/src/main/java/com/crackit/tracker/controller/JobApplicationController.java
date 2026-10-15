@@ -19,6 +19,11 @@ public class JobApplicationController {
         return jobApplicationService.saveJob(request);
     }
 
+    @PostMapping("/track-apply")
+    public JobApplicationResponse trackApply(@RequestBody TrackApplyRequest request) {
+        return jobApplicationService.trackApply(request);
+    }
+
     @PatchMapping("/{applicationId}/status")
     public JobApplicationResponse updateStatus(
             @PathVariable String applicationId,

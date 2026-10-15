@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { DiscoverSkeleton } from '../components/Skeletons'
 import PageHeader from '../components/ui/PageHeader'
+import ApplyConfirmModal from '../components/tracker/ApplyConfirmModal'
+import { useToast } from '../components/ui/ToastProvider'
 import api from '../api/axios'
 
 function SourceBadge({ source, sourceType, atsPlatform }) {
@@ -88,7 +90,7 @@ function useDebounce(value, delay = 250) {
   return debounced
 }
 
-function JobCard({ job, onSave, onDismiss }) {
+function JobCard({ job, onSave, onDismiss, onApplyClick, isApplied }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dismissing, setDismissing] = useState(false);
@@ -319,11 +321,12 @@ function JobCard({ job, onSave, onDismiss }) {
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
         {job.url && (
-          <a
-            href={job.url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={e => e.stopPropagation()}
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              if (onApplyClick) onApplyClick(job);
+            }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -336,43 +339,64 @@ function JobCard({ job, onSave, onDismiss }) {
               color: isCareerPage ? '#fff' : '#7c3aed',
               textDecoration: 'none',
               fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
               transition: 'all 0.15s ease'
             }}
           >
             <i className={isCareerPage ? "ti ti-external-link" : "ti ti-link"} style={{ fontSize: 13 }} />
-            {isCareerPage ? "Official Apply ↗" : "View Job"}
-          </a>
+            {isCareerPage ? "Official Apply ↗" : "View & Apply ↗"}
+          </button>
         )}
 
-        <button
-          onClick={e => {
-            e.stopPropagation();
-            handleSave();
-          }}
-          disabled={saving || saved}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-            padding: '7px 13px',
-            borderRadius: 10,
-            fontSize: 12,
-            background: saved ? '#d1fae5' : isCareerPage ? 'rgba(124,58,237,0.1)' : '#7c3aed',
-            border: isCareerPage ? '1px solid rgba(124,58,237,0.2)' : 'none',
-            color: saved ? '#065f46' : isCareerPage ? '#7c3aed' : '#fff',
-            fontWeight: 700,
-            cursor: saved ? 'default' : 'pointer',
-            fontFamily: 'inherit',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          {saved
-            ? <><i className="ti ti-check" style={{ fontSize: 13 }} /> Saved</>
-            : saving
-              ? <><i className="ti ti-loader" style={{ fontSize: 13 }} /> Saving...</>
-              : <><i className="ti ti-bookmark" style={{ fontSize: 13 }} /> Save to Tracker</>
-          }
-        </button>
+        {isApplied ? (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '7px 13px',
+              borderRadius: 10,
+              fontSize: 12,
+              background: '#d1fae5',
+              border: '1px solid #a7f3d0',
+              color: '#065f46',
+              fontWeight: 700
+            }}
+          >
+            <i className="ti ti-check" style={{ fontSize: 13 }} /> Applied
+          </span>
+        ) : (
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              handleSave();
+            }}
+            disabled={saving || saved}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '7px 13px',
+              borderRadius: 10,
+              fontSize: 12,
+              background: saved ? '#d1fae5' : isCareerPage ? 'rgba(124,58,237,0.1)' : '#7c3aed',
+              border: isCareerPage ? '1px solid rgba(124,58,237,0.2)' : 'none',
+              color: saved ? '#065f46' : isCareerPage ? '#7c3aed' : '#fff',
+              fontWeight: 700,
+              cursor: saved ? 'default' : 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {saved
+              ? <><i className="ti ti-check" style={{ fontSize: 13 }} /> Saved</>
+              : saving
+                ? <><i className="ti ti-loader" style={{ fontSize: 13 }} /> Saving...</>
+                : <><i className="ti ti-bookmark" style={{ fontSize: 13 }} /> Save to Tracker</>
+            }
+          </button>
+        )}
       </div>
     </div>
   );
@@ -469,7 +493,27 @@ export default function DiscoverPage() {
   const [sourceFilter, setSourceFilter] = useState("ALL"); // ALL | CAREER_PAGE_ATS | SEARCH_ENGINE | API_AGGREGATOR
   const [error, setError] = useState("");
   const [profile, setProfile] = useState(null);
+  const [applyingJob, setApplyingJob] = useState(null);
+  const [appliedJobIds, setAppliedJobIds] = useState(new Set());
+  const { showToast } = useToast();
   const navigate = useNavigate();
+
+  const handleApplyClick = (job) => {
+    if (job.url) {
+      window.open(job.url, '_blank');
+    }
+    setApplyingJob(job);
+  };
+
+  const handleTrackSuccess = (trackedApp) => {
+    if (applyingJob?.id) {
+      setAppliedJobIds(prev => new Set(prev).add(applyingJob.id));
+    }
+    showToast({
+      type: 'success',
+      message: `Added ${trackedApp?.companyName || 'job'} to your pipeline as APPLIED! 🚀`
+    });
+  };
 
   useEffect(() => {
     fetchRecommended();
@@ -723,11 +767,20 @@ export default function DiscoverPage() {
                 key={job.id}
                 job={job}
                 onDismiss={handleDismiss}
+                onApplyClick={handleApplyClick}
+                isApplied={appliedJobIds.has(job.id)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ApplyConfirmModal
+        job={applyingJob}
+        isOpen={!!applyingJob}
+        onClose={() => setApplyingJob(null)}
+        onTrackSuccess={handleTrackSuccess}
+      />
     </>
   );
 }
