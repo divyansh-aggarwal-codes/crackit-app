@@ -122,6 +122,10 @@ public class ResumeMatchService {
      * Stage B: AI Gemini deep evaluation for top candidates (>=75%) with SHA-256 caching and provisional fallback.
      */
     public MatchResult calculateTier1Score(User user, DiscoveredJob job) {
+        return calculateTier1Score(user, job, true);
+    }
+
+    public MatchResult calculateTier1Score(User user, DiscoveredJob job, boolean enableStageB) {
         if (user == null || job == null) {
             return MatchResult.builder().matchScore(50).matchedSkills(List.of()).missingSkills(List.of()).build();
         }
@@ -177,8 +181,14 @@ public class ResumeMatchService {
                 .missingSkills(missingSkills.stream().distinct().limit(6).toList())
                 .build();
 
-        // 7. Stage B: Gemini AI Deep Evaluation Hook for Top Candidates (>= 75%)
-        if (stageAScore >= 75 && aiServiceClient != null) {
+        // 7. Check Stage B Cache first
+        String cacheKey = JobUrlNormalizer.sha256(user.getId() + ":" + (job.getUrlHash() != null ? job.getUrlHash() : job.getId()));
+        if (aiScoreCache.containsKey(cacheKey)) {
+            return aiScoreCache.get(cacheKey);
+        }
+
+        // 8. Stage B: Gemini AI Deep Evaluation Hook (only when explicitly requested, never in fast bulk ranking)
+        if (enableStageB && stageAScore >= 75 && aiServiceClient != null) {
             return evaluateStageBWithAi(user, job, stageAResult, fullJobCorpus);
         }
 

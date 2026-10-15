@@ -134,14 +134,14 @@ class JobDiscoveryServiceTest {
             return List.of();
         });
 
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job1))).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job1), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(92)
                         .matchedSkills(List.of("Java", "Microservices"))
                         .missingSkills(List.of())
                         .build()
         );
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job2))).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job2), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(88)
                         .matchedSkills(List.of("Java", "Distributed Systems"))
@@ -195,7 +195,7 @@ class JobDiscoveryServiceTest {
 
         when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(dismissedJob, validJob));
 
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(validJob))).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(validJob), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(85)
                         .matchedSkills(List.of("Java"))
@@ -228,7 +228,7 @@ class JobDiscoveryServiceTest {
                 .build();
 
         when(discoveredJobRepository.searchActiveByKeyword(anyString())).thenReturn(List.of(job));
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job))).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(90)
                         .matchedSkills(List.of("Java", "MySQL"))
@@ -260,7 +260,7 @@ class JobDiscoveryServiceTest {
 
         when(discoveredJobRepository.searchActiveByKeyword("Java")).thenReturn(List.of(job));
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job))).thenReturn(
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), anyBoolean())).thenReturn(
                 ResumeMatchService.MatchResult.builder()
                         .matchScore(80)
                         .matchedSkills(List.of("Java"))
