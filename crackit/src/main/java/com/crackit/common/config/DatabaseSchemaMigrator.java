@@ -101,8 +101,12 @@ public class DatabaseSchemaMigrator implements ApplicationRunner {
                 "`created_at` DATETIME NOT NULL, " +
                 "`updated_at` DATETIME NOT NULL, " +
                 "UNIQUE KEY `uk_user_job` (`user_id`, `discovered_job_id`)" +
-                ")"
+                ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             );
+
+            try {
+                stmt.executeUpdate("ALTER TABLE `user_job_interactions` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (Exception ignored) {}
 
             // notifications table
             ensureTable(stmt, "notifications",

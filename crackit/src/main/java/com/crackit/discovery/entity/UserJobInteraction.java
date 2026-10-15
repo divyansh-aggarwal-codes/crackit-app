@@ -23,11 +23,11 @@ public class UserJobInteraction {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "discovered_job_id", nullable = false)
+    @JoinColumn(name = "discovered_job_id", nullable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private DiscoveredJob discoveredJob;
 
     @Column(name = "match_score")
