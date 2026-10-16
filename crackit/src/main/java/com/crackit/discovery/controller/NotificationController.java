@@ -89,7 +89,7 @@ public class NotificationController {
             targetUser = getLoggedInUser();
         }
 
-        boolean sent = notificationService.sendDailyStrongMatchNotificationForUser(targetUser);
+        boolean sent = notificationService.sendDailyStrongMatchNotificationForUser(targetUser, true);
         return ResponseEntity.ok(Map.of(
                 "success", sent,
                 "recipient", targetUser.getEmail(),

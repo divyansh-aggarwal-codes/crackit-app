@@ -17,11 +17,33 @@ public interface UserJobInteractionRepository extends JpaRepository<UserJobInter
 
     List<UserJobInteraction> findByUserIdAndStatus(String userId, String status);
 
-    @Query("SELECT uji FROM UserJobInteraction uji WHERE uji.user.id = :userId AND uji.status != 'DISMISSED' ORDER BY uji.matchScore DESC")
+    @Query("""
+        SELECT uji FROM UserJobInteraction uji 
+        WHERE uji.user.id = :userId 
+          AND (uji.status IS NULL OR uji.status != 'DISMISSED')
+          AND (uji.discoveredJob.isActive IS NULL OR uji.discoveredJob.isActive = true)
+        ORDER BY uji.matchScore DESC
+    """)
     List<UserJobInteraction> findActiveRecommendationsForUser(@Param("userId") String userId);
 
-    @Query("SELECT uji FROM UserJobInteraction uji WHERE uji.user.id = :userId AND uji.matchScore >= :minScore AND uji.status != 'DISMISSED' ORDER BY uji.matchScore DESC")
+    @Query("""
+        SELECT uji FROM UserJobInteraction uji 
+        WHERE uji.user.id = :userId 
+          AND uji.matchScore >= :minScore 
+          AND (uji.status IS NULL OR uji.status != 'DISMISSED')
+          AND (uji.discoveredJob.isActive IS NULL OR uji.discoveredJob.isActive = true)
+        ORDER BY uji.matchScore DESC
+    """)
     List<UserJobInteraction> findByUserIdAndMinMatchScore(@Param("userId") String userId, @Param("minScore") int minScore);
+
+    @Query("""
+        SELECT uji FROM UserJobInteraction uji 
+        WHERE uji.user.id = :userId 
+          AND (uji.status IS NULL OR uji.status != 'DISMISSED')
+          AND (uji.discoveredJob.isActive IS NULL OR uji.discoveredJob.isActive = true)
+        ORDER BY uji.matchScore DESC
+    """)
+    List<UserJobInteraction> findTopActiveInteractionsForUser(@Param("userId") String userId);
 
     @Query("""
         SELECT uji FROM UserJobInteraction uji 

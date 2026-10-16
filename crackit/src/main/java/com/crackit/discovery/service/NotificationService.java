@@ -2,8 +2,10 @@ package com.crackit.discovery.service;
 
 import com.crackit.auth.entity.User;
 import com.crackit.auth.repository.UserRepository;
+import com.crackit.discovery.entity.DiscoveredJob;
 import com.crackit.discovery.entity.Notification;
 import com.crackit.discovery.entity.UserJobInteraction;
+import com.crackit.discovery.repository.DiscoveredJobRepository;
 import com.crackit.discovery.repository.NotificationRepository;
 import com.crackit.discovery.repository.UserJobInteractionRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,14 @@ public class NotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     @org.springframework.context.annotation.Lazy
     private JobDiscoveryService jobDiscoveryService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private DiscoveredJobRepository discoveredJobRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private ResumeMatchService resumeMatchService;
 
     public List<Notification> getNotificationsForUser(String userId) {
         return notificationRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
@@ -99,13 +109,42 @@ public class NotificationService {
             List<UserJobInteraction> unnotified = userJobInteractionRepository.findUnnotifiedStrongMatches(75);
             log.info("[NOTIFICATION SERVICE] Running daily match notification scan. Found {} unnotified strong matches.", unnotified.size());
 
-            if (unnotified.isEmpty()) {
-                return 0;
-            }
-
             // Group by user
             Map<User, List<UserJobInteraction>> byUser = unnotified.stream()
                     .collect(Collectors.groupingBy(UserJobInteraction::getUser));
+
+            // Candidate Fallback: For any active candidate with alerts enabled who has NOT received
+            // an alert email in the last 20 hours, include their top active matches so candidates
+            // reliably receive their morning alert even if no new jobs were scraped since yesterday.
+            try {
+                List<User> activeCandidates = userRepository.findAll().stream()
+                        .filter(u -> !Boolean.FALSE.equals(u.getJobAlertsEnabled()))
+                        .collect(Collectors.toList());
+
+                LocalDateTime last20Hours = LocalDateTime.now().minusHours(20);
+                for (User candidate : activeCandidates) {
+                    if (!byUser.containsKey(candidate)) {
+                        long recentAlerts = notificationRepository.countRecentNotificationsByUserAndType(
+                                candidate.getId(), "STRONG_JOB_MATCH", last20Hours);
+                        if (recentAlerts == 0) {
+                            List<UserJobInteraction> userMatches = userJobInteractionRepository.findByUserIdAndMinMatchScore(candidate.getId(), 50);
+                            if (userMatches.isEmpty()) {
+                                userMatches = userJobInteractionRepository.findTopActiveInteractionsForUser(candidate.getId());
+                            }
+                            if (!userMatches.isEmpty()) {
+                                byUser.put(candidate, userMatches);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[NOTIFICATION SERVICE] Fallback daily match grouping encountered error: {}", e.getMessage());
+            }
+
+            if (byUser.isEmpty()) {
+                log.info("[NOTIFICATION SERVICE] No candidates require daily notifications at this time.");
+                return 0;
+            }
 
             int alertCount = 0;
             for (Map.Entry<User, List<UserJobInteraction>> entry : byUser.entrySet()) {
@@ -183,7 +222,25 @@ public class NotificationService {
      */
     @Transactional
     public boolean sendDailyStrongMatchNotificationForUser(User user) {
-        if (user == null || Boolean.FALSE.equals(user.getJobAlertsEnabled())) {
+        return sendDailyStrongMatchNotificationForUser(user, false);
+    }
+
+    /**
+     * Dispatches daily strong match alert email on-demand for a single user with option to force-enable alerts.
+     */
+    @Transactional
+    public boolean sendDailyStrongMatchNotificationForUser(User user, boolean forceAlerts) {
+        if (user == null) {
+            return false;
+        }
+
+        if (forceAlerts && Boolean.FALSE.equals(user.getJobAlertsEnabled())) {
+            log.info("[NOTIFICATION SERVICE] Force-enabling job alerts for user {}", user.getEmail());
+            user.setJobAlertsEnabled(true);
+            User saved = userRepository.save(user);
+            if (saved != null) user = saved;
+        } else if (Boolean.FALSE.equals(user.getJobAlertsEnabled())) {
+            log.info("[NOTIFICATION SERVICE] User {} has job alerts explicitly disabled. Skipping.", user.getEmail());
             return false;
         }
 
@@ -198,11 +255,26 @@ public class NotificationService {
 
         List<UserJobInteraction> matches = userJobInteractionRepository.findUnnotifiedStrongMatchesForUser(user.getId(), 70);
         if (matches.isEmpty()) {
-            matches = userJobInteractionRepository.findByUserIdAndMinMatchScore(user.getId(), 60);
+            matches = userJobInteractionRepository.findByUserIdAndMinMatchScore(user.getId(), 50);
+        }
+        if (matches.isEmpty()) {
+            matches = userJobInteractionRepository.findTopActiveInteractionsForUser(user.getId());
+        }
+
+        if (matches.isEmpty() && discoveredJobRepository != null) {
+            log.info("[NOTIFICATION SERVICE] Generating baseline matches for user {} directly from active catalog.", user.getEmail());
+            List<DiscoveredJob> baseline = discoveredJobRepository.findTop10ActiveJobs();
+            matches = new ArrayList<>();
+            for (DiscoveredJob dj : baseline) {
+                if (resumeMatchService != null) {
+                    ResumeMatchService.MatchResult m = resumeMatchService.calculateTier1Score(user, dj, false);
+                    matches.add(resumeMatchService.recordInteraction(user, dj, m, "NEW"));
+                }
+            }
         }
 
         if (matches.isEmpty()) {
-            log.info("[NOTIFICATION SERVICE] No strong matches found to notify for user {}", user.getEmail());
+            log.warn("[NOTIFICATION SERVICE] No strong matches found to notify for user {}", user.getEmail());
             return false;
         }
 

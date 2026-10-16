@@ -49,11 +49,12 @@ public class PublicJobTrackingController {
                 ));
             }
             User user = userOpt.get();
-            boolean dispatched = notificationService.sendDailyStrongMatchNotificationForUser(user);
+            boolean dispatched = notificationService.sendDailyStrongMatchNotificationForUser(user, true);
             return ResponseEntity.ok(Map.of(
                     "success", dispatched,
                     "target", user.getEmail(),
-                    "message", dispatched ? "Daily strong match alert dispatched successfully." : "No new qualifying matches found or alerts disabled."
+                    "message", dispatched ? "Daily strong match alert dispatched successfully to " + user.getEmail()
+                                          : "Could not dispatch alert. Check server logs."
             ));
         }
 

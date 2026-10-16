@@ -134,7 +134,7 @@ public class JobDiscoveryService {
             for (DiscoveredJob job : catalog) {
                 try {
                     ResumeMatchService.MatchResult match = resumeMatchService.calculateTier1Score(user, job, userSkills, candidateExp, false);
-                    if (match.getMatchScore() >= 60) {
+                    if (match.getMatchScore() >= 40) {
                         resumeMatchService.recordInteraction(user, job, match, "NEW");
                     }
                 } catch (Exception ignored) {}

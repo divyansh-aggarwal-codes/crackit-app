@@ -132,7 +132,7 @@ class PublicJobTrackingControllerTest {
     void testDispatchAlertsWebhookSingleUser() {
         User user = User.builder().id("u1").email("divyanshu5981.iimt@gmail.com").build();
         when(userRepository.findByEmail("divyanshu5981.iimt@gmail.com")).thenReturn(Optional.of(user));
-        when(notificationService.sendDailyStrongMatchNotificationForUser(user)).thenReturn(true);
+        when(notificationService.sendDailyStrongMatchNotificationForUser(user, true)).thenReturn(true);
 
         ResponseEntity<Map<String, Object>> response = controller.dispatchAlertsWebhook("divyanshu5981.iimt@gmail.com");
 
@@ -140,6 +140,6 @@ class PublicJobTrackingControllerTest {
         assertNotNull(response.getBody());
         assertEquals(true, response.getBody().get("success"));
         assertEquals("divyanshu5981.iimt@gmail.com", response.getBody().get("target"));
-        verify(notificationService, times(1)).sendDailyStrongMatchNotificationForUser(user);
+        verify(notificationService, times(1)).sendDailyStrongMatchNotificationForUser(user, true);
     }
 }

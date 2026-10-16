@@ -20,4 +20,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Stri
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId")
     void markAllAsReadForUser(@Param("userId") String userId);
+
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.user.id = :userId AND n.type = :type AND n.createdAt >= :since")
+    long countRecentNotificationsByUserAndType(@Param("userId") String userId, @Param("type") String type, @Param("since") java.time.LocalDateTime since);
 }
