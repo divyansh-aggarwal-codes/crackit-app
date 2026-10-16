@@ -60,6 +60,12 @@ public class EmailService {
     @Value("${mail.track-apply-url:https://crackit-backend-4bpr.onrender.com/api/public/jobs/track-applied}")
     private String trackApplyBaseUrl = "https://crackit-backend-4bpr.onrender.com/api/public/jobs/track-applied";
 
+    @Value("${mail.resend.api-key:${RESEND_API_KEY:}}")
+    private String resendApiKey = "";
+
+    @Value("${mail.brevo.api-key:${BREVO_API_KEY:}}")
+    private String brevoApiKey = "";
+
     /**
      * Sends an HTML email via Gmail SMTP using STARTTLS.
      */
@@ -79,6 +85,20 @@ public class EmailService {
         if (toEmail == null || toEmail.isBlank() || !toEmail.contains("@")) {
             log.warn("[EMAIL SERVICE] Invalid recipient email address: '{}'", toEmail);
             return false;
+        }
+
+        // 1. Check for Resend HTTPS API (runs over port 443 - bypasses Render SMTP block)
+        if (resendApiKey != null && !resendApiKey.isBlank()) {
+            boolean httpSent = sendViaResend(toEmail, subject, htmlBody);
+            if (httpSent) return true;
+            log.warn("[EMAIL SERVICE] Resend HTTPS delivery failed. Falling back to next channel.");
+        }
+
+        // 2. Check for Brevo HTTPS API (runs over port 443 - bypasses Render SMTP block)
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            boolean httpSent = sendViaBrevo(toEmail, subject, htmlBody);
+            if (httpSent) return true;
+            log.warn("[EMAIL SERVICE] Brevo HTTPS delivery failed. Falling back to next channel.");
         }
 
         String cleanPassword = password != null ? password.replace(" ", "").trim() : "";
@@ -339,5 +359,79 @@ public class EmailService {
             </body>
             </html>
         """, candidateName, matches.size(), targetRole, cards.toString(), unsubLink);
+    }
+
+    private boolean sendViaResend(String toEmail, String subject, String htmlBody) {
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> payload = java.util.Map.of(
+                    "from", fromName + " <onboarding@resend.dev>",
+                    "to", java.util.List.of(toEmail.trim()),
+                    "subject", subject,
+                    "html", htmlBody
+            );
+
+            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + resendApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            java.net.http.HttpResponse<String> res = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() >= 200 && res.statusCode() < 300) {
+                log.info("[EMAIL SERVICE] Delivered email via Resend HTTPS API to '{}'", toEmail);
+                return true;
+            } else {
+                log.warn("[EMAIL SERVICE] Resend API returned status {}: {}", res.statusCode(), res.body());
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("[EMAIL SERVICE] Resend HTTPS delivery error: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean sendViaBrevo(String toEmail, String subject, String htmlBody) {
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> sender = java.util.Map.of("name", fromName, "email", "crackit.notifications@gmail.com");
+            java.util.Map<String, Object> recipient = java.util.Map.of("email", toEmail.trim());
+            java.util.Map<String, Object> payload = java.util.Map.of(
+                    "sender", sender,
+                    "to", java.util.List.of(recipient),
+                    "subject", subject,
+                    "htmlContent", htmlBody
+            );
+
+            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.brevo.com/v3/smtp/email"))
+                    .header("api-key", brevoApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            java.net.http.HttpResponse<String> res = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() >= 200 && res.statusCode() < 300) {
+                log.info("[EMAIL SERVICE] Delivered email via Brevo HTTPS API to '{}'", toEmail);
+                return true;
+            } else {
+                log.warn("[EMAIL SERVICE] Brevo API returned status {}: {}", res.statusCode(), res.body());
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("[EMAIL SERVICE] Brevo HTTPS delivery error: {}", e.getMessage());
+            return false;
+        }
     }
 }

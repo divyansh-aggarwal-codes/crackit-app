@@ -99,6 +99,10 @@ keepalive:
 
 mail:
   enabled: ${MAIL_ENABLED:true}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+  brevo:
+    api-key: ${BREVO_API_KEY:}
   smtp:
     host: ${MAIL_SMTP_HOST:smtp.gmail.com}
     port: ${MAIL_SMTP_PORT:587}
