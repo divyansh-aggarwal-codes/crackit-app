@@ -4,6 +4,7 @@ import com.crackit.auth.entity.User;
 import com.crackit.auth.repository.UserRepository;
 import com.crackit.discovery.entity.DiscoveredJob;
 import com.crackit.discovery.repository.DiscoveredJobRepository;
+import com.crackit.discovery.service.NotificationService;
 import com.crackit.tracker.dto.TrackApplyRequest;
 import com.crackit.tracker.service.JobApplicationService;
 import lombok.RequiredArgsConstructor;
@@ -11,11 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -27,9 +26,44 @@ public class PublicJobTrackingController {
     private final UserRepository userRepository;
     private final DiscoveredJobRepository discoveredJobRepository;
     private final JobApplicationService jobApplicationService;
+    private final NotificationService notificationService;
 
     @Value("${app.frontend-url:https://crackit-app-five.vercel.app}")
     private String frontendUrl = "https://crackit-app-five.vercel.app";
+
+    /**
+     * Public webhook endpoint to trigger daily job match alerts.
+     * Can be invoked by external schedulers (e.g. cron-job.org) or manually to wake Render and dispatch alerts.
+     */
+    @RequestMapping(value = "/dispatch-alerts", method = {RequestMethod.GET, RequestMethod.POST})
+    public ResponseEntity<Map<String, Object>> dispatchAlertsWebhook(
+            @RequestParam(value = "email", required = false) String email
+    ) {
+        log.info("[WEBHOOK] Received dispatch-alerts trigger request. Target email: {}", email);
+        if (email != null && !email.isBlank()) {
+            Optional<User> userOpt = userRepository.findByEmail(email.trim());
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "message", "User not found with email: " + email
+                ));
+            }
+            User user = userOpt.get();
+            boolean dispatched = notificationService.sendDailyStrongMatchNotificationForUser(user);
+            return ResponseEntity.ok(Map.of(
+                    "success", dispatched,
+                    "target", user.getEmail(),
+                    "message", dispatched ? "Daily strong match alert dispatched successfully." : "No new qualifying matches found or alerts disabled."
+            ));
+        }
+
+        int count = notificationService.sendDailyStrongMatchNotifications();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "dispatchedCount", count,
+                "message", String.format("Daily alert job executed. Dispatched alerts to %d users.", count)
+        ));
+    }
 
     @GetMapping(value = "/track-applied", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> trackAppliedFromEmail(

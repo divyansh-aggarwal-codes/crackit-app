@@ -30,6 +30,10 @@ public class NotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.crackit.common.scheduler.DistributedSchedulerLockService distributedSchedulerLockService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private JobDiscoveryService jobDiscoveryService;
+
     public List<Notification> getNotificationsForUser(String userId) {
         return notificationRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
     }
@@ -68,23 +72,35 @@ public class NotificationService {
 
     /**
      * Daily morning notification runner (runs at 9:00 AM Asia/Kolkata every day).
-     * Scans for strong matches (>=80% match score) discovered in the last 24 hours that haven't been notified yet.
+     * Proactively pre-scores candidates, scans for strong matches (>=75%), and dispatches emails.
      */
     @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Kolkata")
     @Transactional
-    public void sendDailyStrongMatchNotifications() {
+    public int sendDailyStrongMatchNotifications() {
         if (distributedSchedulerLockService != null && !distributedSchedulerLockService.acquireLock("daily_job_alerts", 30)) {
             log.info("[NOTIFICATION SERVICE] Distributed lock 'daily_job_alerts' is held by another instance. Skipping.");
-            return;
+            return 0;
         }
 
         try {
-            LocalDateTime since = LocalDateTime.now().minusHours(24);
-            List<UserJobInteraction> unnotified = userJobInteractionRepository.findUnnotifiedStrongMatches(80, since);
+            // Proactively ensure active candidates have fresh pre-scored matches
+            if (jobDiscoveryService != null) {
+                try {
+                    List<User> activeUsers = userRepository.findAll().stream()
+                            .filter(u -> !Boolean.FALSE.equals(u.getJobAlertsEnabled()))
+                            .collect(Collectors.toList());
+                    jobDiscoveryService.preScoreForActiveUsers(activeUsers);
+                } catch (Exception e) {
+                    log.warn("[NOTIFICATION SERVICE] Pre-scoring pass before daily alerts had a non-fatal error: {}", e.getMessage());
+                }
+            }
+
+            // Lower threshold to 75% for resilient candidate coverage and remove 24h cutoff
+            List<UserJobInteraction> unnotified = userJobInteractionRepository.findUnnotifiedStrongMatches(75);
             log.info("[NOTIFICATION SERVICE] Running daily match notification scan. Found {} unnotified strong matches.", unnotified.size());
 
             if (unnotified.isEmpty()) {
-                return;
+                return 0;
             }
 
             // Group by user
@@ -123,7 +139,7 @@ public class NotificationService {
 
                 String title = String.format("🎯 %d New Strong Job Matches Found", matches.size());
                 String message = String.format(
-                        "We found %d new openings matching 80%%+ for %s! Top match: %s at %s (%d%% fit). Check them out in Discover.",
+                        "We found %d new openings matching for %s! Top match: %s at %s (%d%% fit). Check them out in Discover.",
                         matches.size(),
                         roleTarget,
                         topTitle,
@@ -154,11 +170,86 @@ public class NotificationService {
             }
 
             log.info("[NOTIFICATION SERVICE] Dispatched daily strong match notifications to {} users.", alertCount);
+            return alertCount;
         } finally {
             if (distributedSchedulerLockService != null) {
                 distributedSchedulerLockService.releaseLock("daily_job_alerts");
             }
         }
+    }
+
+    /**
+     * Dispatches daily strong match alert email on-demand for a single user.
+     */
+    @Transactional
+    public boolean sendDailyStrongMatchNotificationForUser(User user) {
+        if (user == null || Boolean.FALSE.equals(user.getJobAlertsEnabled())) {
+            return false;
+        }
+
+        // Proactively pre-score for this specific user
+        if (jobDiscoveryService != null) {
+            try {
+                jobDiscoveryService.preScoreForUser(user);
+            } catch (Exception e) {
+                log.warn("[NOTIFICATION SERVICE] Single user pre-scoring error for {}: {}", user.getEmail(), e.getMessage());
+            }
+        }
+
+        List<UserJobInteraction> matches = userJobInteractionRepository.findUnnotifiedStrongMatchesForUser(user.getId(), 70);
+        if (matches.isEmpty()) {
+            matches = userJobInteractionRepository.findByUserIdAndMinMatchScore(user.getId(), 60);
+        }
+
+        if (matches.isEmpty()) {
+            log.info("[NOTIFICATION SERVICE] No strong matches found to notify for user {}", user.getEmail());
+            return false;
+        }
+
+        // Ensure user has a persistent unsubscribe token saved
+        if (user.getUnsubscribeToken() == null || user.getUnsubscribeToken().isBlank()) {
+            String token = com.crackit.discovery.util.JobUrlNormalizer.sha256(user.getId() + ":" + UUID.randomUUID());
+            user.setUnsubscribeToken(token);
+            User saved = userRepository.save(user);
+            if (saved != null) user = saved;
+        }
+
+        List<UserJobInteraction> topMatches = matches.stream()
+                .sorted(Comparator.comparing(UserJobInteraction::getMatchScore).reversed())
+                .limit(5)
+                .collect(Collectors.toList());
+        UserJobInteraction topMatch = topMatches.get(0);
+        String topCompany = topMatch.getDiscoveredJob() != null ? topMatch.getDiscoveredJob().getCompany() : "Top Company";
+        String topTitle = topMatch.getDiscoveredJob() != null ? topMatch.getDiscoveredJob().getTitle() : "Engineer";
+        String roleTarget = user.getTargetRole() != null && !user.getTargetRole().isBlank() ? user.getTargetRole() : "your profile";
+
+        String title = String.format("🎯 %d New Strong Job Matches Found", topMatches.size());
+        String message = String.format(
+                "We found %d new openings matching for %s! Top match: %s at %s (%d%% fit). Check them out in Discover.",
+                topMatches.size(),
+                roleTarget,
+                topTitle,
+                topCompany,
+                topMatch.getMatchScore()
+        );
+
+        boolean sent = false;
+        try {
+            sent = emailService.sendStrongJobMatchAlert(user, topMatches);
+        } catch (Exception e) {
+            log.error("[NOTIFICATION SERVICE] Failed to dispatch match email to {}: {}", user.getEmail(), e.getMessage());
+        }
+
+        if (sent) {
+            createNotification(user, title, message, "STRONG_JOB_MATCH", topMatch.getDiscoveredJob() != null ? topMatch.getDiscoveredJob().getId() : null);
+            for (UserJobInteraction uji : topMatches) {
+                uji.setNotified(true);
+                userJobInteractionRepository.save(uji);
+            }
+            log.info("[NOTIFICATION SERVICE] Successfully dispatched on-demand daily match alert to {}", user.getEmail());
+        }
+
+        return sent;
     }
 
     public boolean sendTestEmail(User user) {

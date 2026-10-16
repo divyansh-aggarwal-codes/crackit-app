@@ -103,20 +103,44 @@ public class JobDiscoveryService {
         preScoreForActiveUsers(activeUsers);
     }
 
-    private void preScoreForActiveUsers(List<User> users) {
-        LocalDateTime since = LocalDateTime.now().minusDays(7);
-        List<DiscoveredJob> recentJobs = discoveredJobRepository.findActiveJobsSince(since);
+    public void preScoreForActiveUsers(List<User> users) {
+        List<DiscoveredJob> recentJobs = discoveredJobRepository.findTop150ActiveJobs();
         if (recentJobs.isEmpty()) {
-            recentJobs = discoveredJobRepository.findTop150ByIsActiveTrueOrderByFetchedAtDesc();
+            seedBaselineJobs();
+            recentJobs = discoveredJobRepository.findTop150ActiveJobs();
         }
 
         for (User user : users) {
-            for (DiscoveredJob job : recentJobs) {
+            preScoreForUser(user, recentJobs);
+        }
+    }
+
+    public void preScoreForUser(User user) {
+        if (user == null) return;
+        List<DiscoveredJob> recentJobs = discoveredJobRepository.findTop150ActiveJobs();
+        if (recentJobs.isEmpty()) {
+            seedBaselineJobs();
+            recentJobs = discoveredJobRepository.findTop150ActiveJobs();
+        }
+        preScoreForUser(user, recentJobs);
+    }
+
+    public void preScoreForUser(User user, List<DiscoveredJob> catalog) {
+        if (user == null || catalog == null || catalog.isEmpty()) return;
+        try {
+            List<Skill> userSkills = skillRepository.findByUserId(user.getId());
+            int candidateExp = resumeMatchService.resolveCandidateExperience(user);
+
+            for (DiscoveredJob job : catalog) {
                 try {
-                    ResumeMatchService.MatchResult match = resumeMatchService.calculateTier1Score(user, job);
-                    resumeMatchService.recordInteraction(user, job, match, "NEW");
+                    ResumeMatchService.MatchResult match = resumeMatchService.calculateTier1Score(user, job, userSkills, candidateExp, false);
+                    if (match.getMatchScore() >= 60) {
+                        resumeMatchService.recordInteraction(user, job, match, "NEW");
+                    }
                 } catch (Exception ignored) {}
             }
+        } catch (Exception e) {
+            log.warn("[JOB DISCOVERY ENGINE] Pre-scoring failed for user {}: {}", user.getEmail(), e.getMessage());
         }
     }
 

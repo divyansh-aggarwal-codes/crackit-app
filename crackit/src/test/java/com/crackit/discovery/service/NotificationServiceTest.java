@@ -15,7 +15,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,6 +37,9 @@ class NotificationServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private JobDiscoveryService jobDiscoveryService;
+
     private NotificationService notificationService;
 
     @BeforeEach
@@ -46,7 +48,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    @DisplayName("Should dispatch consolidated daily notification for users with >=80% strong matches")
+    @DisplayName("Should dispatch consolidated daily notification for users with >=75% strong matches")
     void testSendDailyStrongMatchNotifications() {
         User user = User.builder()
                 .id("user-999")
@@ -68,7 +70,7 @@ class NotificationServiceTest {
                 .notified(false)
                 .build();
 
-        when(userJobInteractionRepository.findUnnotifiedStrongMatches(eq(80), any(LocalDateTime.class)))
+        when(userJobInteractionRepository.findUnnotifiedStrongMatches(75))
                 .thenReturn(List.of(interaction));
 
         when(notificationRepository.save(any(Notification.class)))
@@ -76,8 +78,9 @@ class NotificationServiceTest {
 
         when(emailService.sendStrongJobMatchAlert(eq(user), anyList())).thenReturn(true);
 
-        notificationService.sendDailyStrongMatchNotifications();
+        int count = notificationService.sendDailyStrongMatchNotifications();
 
+        assertEquals(1, count);
         ArgumentCaptor<Notification> notifCaptor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository, times(1)).save(notifCaptor.capture());
 
@@ -115,13 +118,14 @@ class NotificationServiceTest {
                 .notified(false)
                 .build();
 
-        when(userJobInteractionRepository.findUnnotifiedStrongMatches(eq(80), any(LocalDateTime.class)))
+        when(userJobInteractionRepository.findUnnotifiedStrongMatches(75))
                 .thenReturn(List.of(interaction));
 
         when(emailService.sendStrongJobMatchAlert(eq(user), anyList())).thenReturn(false);
 
-        notificationService.sendDailyStrongMatchNotifications();
+        int count = notificationService.sendDailyStrongMatchNotifications();
 
+        assertEquals(0, count);
         assertFalse(interaction.getNotified(), "Interaction must remain unnotified if email dispatch fails");
         verify(notificationRepository, never()).save(any(Notification.class));
     }
@@ -150,13 +154,50 @@ class NotificationServiceTest {
                 .notified(false)
                 .build();
 
-        when(userJobInteractionRepository.findUnnotifiedStrongMatches(eq(80), any(LocalDateTime.class)))
+        when(userJobInteractionRepository.findUnnotifiedStrongMatches(75))
                 .thenReturn(List.of(interaction));
 
-        notificationService.sendDailyStrongMatchNotifications();
+        int count = notificationService.sendDailyStrongMatchNotifications();
 
+        assertEquals(0, count);
         verify(emailService, never()).sendStrongJobMatchAlert(any(), any());
         assertFalse(interaction.getNotified());
+    }
+
+    @Test
+    @DisplayName("Should dispatch on-demand daily match alert for a single user")
+    void testSendDailyStrongMatchNotificationForUser() {
+        User user = User.builder()
+                .id("user-div")
+                .email("divyanshu5981.iimt@gmail.com")
+                .jobAlertsEnabled(true)
+                .unsubscribeToken("test-token-123")
+                .build();
+
+        DiscoveredJob job = DiscoveredJob.builder()
+                .id("job-1")
+                .title("Backend Engineer")
+                .company("Crackit Tech")
+                .build();
+
+        UserJobInteraction uji = UserJobInteraction.builder()
+                .id("uji-1")
+                .user(user)
+                .discoveredJob(job)
+                .matchScore(85)
+                .notified(false)
+                .build();
+
+        when(userJobInteractionRepository.findUnnotifiedStrongMatchesForUser("user-div", 70))
+                .thenReturn(List.of(uji));
+        when(emailService.sendStrongJobMatchAlert(eq(user), anyList())).thenReturn(true);
+
+        boolean success = notificationService.sendDailyStrongMatchNotificationForUser(user);
+
+        assertTrue(success);
+        assertTrue(uji.getNotified());
+        verify(emailService, times(1)).sendStrongJobMatchAlert(eq(user), anyList());
+        verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 
     @Test
@@ -186,9 +227,10 @@ class NotificationServiceTest {
 
         when(mockLockService.acquireLock("daily_job_alerts", 30)).thenReturn(false);
 
-        notificationService.sendDailyStrongMatchNotifications();
+        int count = notificationService.sendDailyStrongMatchNotifications();
 
-        verify(userJobInteractionRepository, never()).findUnnotifiedStrongMatches(anyInt(), any());
+        assertEquals(0, count);
+        verify(userJobInteractionRepository, never()).findUnnotifiedStrongMatches(anyInt());
         verify(emailService, never()).sendStrongJobMatchAlert(any(), any());
     }
 
@@ -200,11 +242,12 @@ class NotificationServiceTest {
         notificationService.setDistributedSchedulerLockService(mockLockService);
 
         when(mockLockService.acquireLock("daily_job_alerts", 30)).thenReturn(true);
-        when(userJobInteractionRepository.findUnnotifiedStrongMatches(eq(80), any(LocalDateTime.class)))
+        when(userJobInteractionRepository.findUnnotifiedStrongMatches(75))
                 .thenReturn(List.of());
 
-        notificationService.sendDailyStrongMatchNotifications();
+        int count = notificationService.sendDailyStrongMatchNotifications();
 
+        assertEquals(0, count);
         verify(mockLockService, times(1)).releaseLock("daily_job_alerts");
     }
 }

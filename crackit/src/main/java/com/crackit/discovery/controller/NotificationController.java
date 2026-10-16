@@ -69,6 +69,34 @@ public class NotificationController {
         ));
     }
 
+    @PostMapping("/dispatch-daily")
+    public ResponseEntity<Map<String, Object>> dispatchDailyAlerts() {
+        int count = notificationService.sendDailyStrongMatchNotifications();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "dispatchedCount", count,
+                "message", String.format("Dispatched daily job alerts to %d candidate(s)", count)
+        ));
+    }
+
+    @PostMapping("/dispatch-my-alert")
+    public ResponseEntity<Map<String, Object>> dispatchMyAlert(@RequestParam(required = false) String email) {
+        User targetUser;
+        if (email != null && !email.isBlank()) {
+            targetUser = userRepository.findByEmail(email.trim())
+                    .orElseGet(this::getLoggedInUser);
+        } else {
+            targetUser = getLoggedInUser();
+        }
+
+        boolean sent = notificationService.sendDailyStrongMatchNotificationForUser(targetUser);
+        return ResponseEntity.ok(Map.of(
+                "success", sent,
+                "recipient", targetUser.getEmail(),
+                "message", sent ? "Daily strong match digest email dispatched successfully!" : "No qualifying matches found or job alerts disabled for this user."
+        ));
+    }
+
     @GetMapping("/preferences")
     public ResponseEntity<Map<String, Object>> getPreferences() {
         User user = getLoggedInUser();

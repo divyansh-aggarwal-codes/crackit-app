@@ -4,6 +4,7 @@ import com.crackit.auth.entity.User;
 import com.crackit.auth.repository.UserRepository;
 import com.crackit.discovery.entity.DiscoveredJob;
 import com.crackit.discovery.repository.DiscoveredJobRepository;
+import com.crackit.discovery.service.NotificationService;
 import com.crackit.tracker.dto.JobApplicationResponse;
 import com.crackit.tracker.service.JobApplicationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,6 +36,9 @@ class PublicJobTrackingControllerTest {
     @Mock
     private JobApplicationService jobApplicationService;
 
+    @Mock
+    private NotificationService notificationService;
+
     private PublicJobTrackingController controller;
 
     @BeforeEach
@@ -41,7 +46,8 @@ class PublicJobTrackingControllerTest {
         controller = new PublicJobTrackingController(
                 userRepository,
                 discoveredJobRepository,
-                jobApplicationService
+                jobApplicationService,
+                notificationService
         );
     }
 
@@ -105,5 +111,35 @@ class PublicJobTrackingControllerTest {
         assertNotNull(response.getBody());
         assertTrue(response.getBody().contains("Invalid Request"));
         verify(jobApplicationService, never()).trackApplyForUser(any(), any());
+    }
+
+    @Test
+    @DisplayName("dispatchAlertsWebhook runs batch alerts when no email specified")
+    void testDispatchAlertsWebhookBatch() {
+        when(notificationService.sendDailyStrongMatchNotifications()).thenReturn(3);
+
+        ResponseEntity<Map<String, Object>> response = controller.dispatchAlertsWebhook(null);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(true, response.getBody().get("success"));
+        assertEquals(3, response.getBody().get("dispatchedCount"));
+        verify(notificationService, times(1)).sendDailyStrongMatchNotifications();
+    }
+
+    @Test
+    @DisplayName("dispatchAlertsWebhook dispatches single user alert when email specified")
+    void testDispatchAlertsWebhookSingleUser() {
+        User user = User.builder().id("u1").email("divyanshu5981.iimt@gmail.com").build();
+        when(userRepository.findByEmail("divyanshu5981.iimt@gmail.com")).thenReturn(Optional.of(user));
+        when(notificationService.sendDailyStrongMatchNotificationForUser(user)).thenReturn(true);
+
+        ResponseEntity<Map<String, Object>> response = controller.dispatchAlertsWebhook("divyanshu5981.iimt@gmail.com");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(true, response.getBody().get("success"));
+        assertEquals("divyanshu5981.iimt@gmail.com", response.getBody().get("target"));
+        verify(notificationService, times(1)).sendDailyStrongMatchNotificationForUser(user);
     }
 }
