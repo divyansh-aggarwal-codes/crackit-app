@@ -297,6 +297,7 @@ public class JobDiscoveryService {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             return discoveredJobRepository.findTop150ActiveJobs().stream()
+                    .filter(j -> JobUrlNormalizer.isTechnicalJob(j.getTitle()))
                     .limit(10)
                     .map(j -> toDto(j, 70, List.of("Software Engineering"), List.of(), "NEW"))
                     .collect(Collectors.toList());
@@ -344,6 +345,7 @@ public class JobDiscoveryService {
 
         for (DiscoveredJob job : activeCatalog) {
             if (dismissedSet.contains(job.getId())) continue;
+            if (!JobUrlNormalizer.isTechnicalJob(job.getTitle())) continue;
 
             String corpus = ((job.getTitle() != null ? job.getTitle() : "") + " " +
                              (job.getDescription() != null ? job.getDescription() : "")).toLowerCase();
@@ -372,15 +374,17 @@ public class JobDiscoveryService {
 
         // Backfill candidate pool if < 30 so user always has rich recommendations
         for (DiscoveredJob job : activeCatalog) {
-            if (!dismissedSet.contains(job.getId())) {
+            if (!dismissedSet.contains(job.getId()) && JobUrlNormalizer.isTechnicalJob(job.getTitle())) {
                 candidatePool.add(job);
             }
             if (candidatePool.size() >= 50) break;
         }
 
-        // Failsafe: if still empty, include all active catalog jobs
+        // Failsafe: if still empty, include active catalog jobs that are technical
         if (candidatePool.isEmpty()) {
-            candidatePool.addAll(activeCatalog);
+            activeCatalog.stream()
+                    .filter(j -> JobUrlNormalizer.isTechnicalJob(j.getTitle()))
+                    .forEach(candidatePool::add);
         }
 
         // 4. In-memory scoring using pre-fetched user skills and experience — ZERO database queries in this loop!
@@ -396,9 +400,9 @@ public class JobDiscoveryService {
 
         // Failsafe: If no jobs scored >= 40, backfill so dashboard is NEVER blank
         if (dtos.isEmpty() && !candidatePool.isEmpty()) {
-            for (DiscoveredJob job : candidatePool.stream().limit(6).toList()) {
+            for (DiscoveredJob job : candidatePool.stream().filter(j -> JobUrlNormalizer.isTechnicalJob(j.getTitle())).limit(6).toList()) {
                 String status = statusByJobId.getOrDefault(job.getId(), "NEW");
-                dtos.add(toDto(job, 65, List.of("Software Engineering"), List.of(), status));
+                dtos.add(toDto(job, 55, List.of("Software Engineering"), List.of(), status));
             }
         }
 
@@ -709,44 +713,28 @@ public class JobDiscoveryService {
         log.info("[JOB DISCOVERY ENGINE] Cleaned up {} stale discovered jobs older than 14 days", old.size());
     }
 
-    // ─── Fast Instant Cached Jobs for Dashboard (< 15ms) ─────────────────────
+    // ─── Fast Instant Cached Jobs for Dashboard (< 30ms) ─────────────────────
     public List<DiscoveredJobDto> getCached() {
         try {
-            List<DiscoveredJob> topJobs = discoveredJobRepository.findTop10ActiveJobs();
-            if (topJobs.isEmpty()) {
-                seedBaselineJobs();
-                topJobs = discoveredJobRepository.findTop10ActiveJobs();
+            List<DiscoveredJobDto> recommended = getRecommended();
+            if (recommended != null && !recommended.isEmpty()) {
+                return recommended.stream()
+                        .filter(j -> JobUrlNormalizer.isTechnicalJob(j.getTitle()))
+                        .limit(6)
+                        .collect(Collectors.toList());
             }
 
-            // Quick optional skill check in memory if user is logged in
-            List<Skill> userSkills = Collections.emptyList();
-            try {
-                String email = AuthUtil.getLoggedInUserEmail();
-                User user = userRepository.findByEmail(email).orElse(null);
-                if (user != null) {
-                    userSkills = skillRepository.findByUserId(user.getId());
-                }
-            } catch (Exception ignored) {}
-
-            Set<String> skillTerms = userSkills.stream()
-                    .map(Skill::getSkillName)
-                    .filter(Objects::nonNull)
-                    .map(String::toLowerCase)
-                    .collect(Collectors.toSet());
+            // Fallback to active catalog if getRecommended was empty
+            List<DiscoveredJob> topJobs = discoveredJobRepository.findTop150ActiveJobs();
+            if (topJobs.isEmpty()) {
+                seedBaselineJobs();
+                topJobs = discoveredJobRepository.findTop150ActiveJobs();
+            }
 
             return topJobs.stream()
+                    .filter(j -> JobUrlNormalizer.isTechnicalJob(j.getTitle()))
                     .limit(6)
-                    .map(j -> {
-                        String corpus = ((j.getTitle() != null ? j.getTitle() : "") + " " +
-                                         (j.getDescription() != null ? j.getDescription() : "")).toLowerCase();
-                        List<String> matched = skillTerms.stream()
-                                .filter(s -> s.length() >= 3 && corpus.contains(s))
-                                .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
-                                .limit(3)
-                                .collect(Collectors.toList());
-                        int score = matched.isEmpty() ? 78 : Math.min(95, 75 + matched.size() * 8);
-                        return toDto(j, score, matched.isEmpty() ? List.of("Software Engineering") : matched, List.of(), "NEW");
-                    })
+                    .map(j -> toDto(j, 65, List.of("Software Engineering"), List.of(), "NEW"))
                     .collect(Collectors.toList());
         } catch (Exception ex) {
             log.error("[JOB DISCOVERY ENGINE] Error in getCached(): {}", ex.getMessage());

@@ -31,6 +31,52 @@ public class JobUrlNormalizer {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern NON_TECH_EXCLUSIONS = Pattern.compile(
+            "\\b(safety manager|safety lead|head of safety|homes supply|supply chain|warehouse|inventory|logistics|" +
+            "culinary|chef|cook|barista|housekeep|janitor|custodian|receptionist|concierge|" +
+            "nurse|nursing|physician|doctor|clinical|therapist|dental|pharmacy|" +
+            "sales rep|account executive|business development|\\bbdr\\b|\\bsdr\\b|telecaller|" +
+            "paralegal|legal counsel|attorney|corporate counsel|tax manager|accountant|auditor|payroll|" +
+            "recruiter|talent acquisition|people partner|\\bhrbp\\b|human resources|people ops|" +
+            "cashier|flight attendant|driver|courier|cleaner|facilities manager)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern TECH_ROLE_INDICATORS = Pattern.compile(
+            "\\b(engineer|engineering|developer|architect|programmer|coder|" +
+            "backend|frontend|fullstack|full-stack|front-end|back-end|web developer|" +
+            "devops|sre|site reliability|infrastructure|platform engineer|cloud engineer|systems engineer|" +
+            "data engineer|data scientist|data science|data analyst|machine learning|ml engineer|ai engineer|ai/ml|deep learning|nlp|computer vision|" +
+            "sdet|qa engineer|quality assurance|test automation|automation engineer|test engineer|" +
+            "android|ios|mobile developer|flutter|react native|" +
+            "\\bsde\\b|\\bswe\\b|\\bmts\\b|tech lead|technical lead|engineering manager|director of engineering|vp of engineering|head of engineering|\\bcto\\b|" +
+            "solutions architect|solutions engineer|forward deployed engineer|support engineer|" +
+            "product manager|technical program manager|\\btpm\\b|database administrator|\\bdba\\b|security engineer|cybersecurity)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * Identifies whether a job title belongs to an engineering, technical, data, or product role.
+     * Rejects non-technical company postings (safety, supplies, culinary, sales, administrative, etc.).
+     */
+    public static boolean isTechnicalJob(String title) {
+        if (title == null || title.isBlank()) {
+            return false;
+        }
+        String cleanTitle = title.trim();
+
+        // 1. If it contains non-technical indicators and NO technical role indicator -> Reject
+        boolean matchesNonTech = NON_TECH_EXCLUSIONS.matcher(cleanTitle).find();
+        boolean matchesTech = TECH_ROLE_INDICATORS.matcher(cleanTitle).find();
+
+        if (matchesNonTech && !matchesTech) {
+            return false;
+        }
+
+        // 2. Must match positive technical role indicators
+        return matchesTech;
+    }
+
     /**
      * Canonicalizes a job URL by removing tracking query parameters, normalising scheme/host,
      * while preserving critical job identifiers (e.g. gh_jid, ashby_jid, id).

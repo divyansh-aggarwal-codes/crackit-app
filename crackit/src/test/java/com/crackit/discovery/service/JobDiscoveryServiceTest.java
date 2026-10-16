@@ -205,9 +205,10 @@ class JobDiscoveryServiceTest {
     }
 
     @Test
-    @DisplayName("getCached should return top 6 recommendations for the user")
+    @DisplayName("getCached should return top recommendations using tier 1 scoring for the user")
     void testGetCachedReturnsTopRecommendations() {
         when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
+        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
         when(skillRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
 
         DiscoveredJob job = DiscoveredJob.builder()
@@ -218,13 +219,67 @@ class JobDiscoveryServiceTest {
                 .isActive(true)
                 .build();
 
-        when(discoveredJobRepository.findTop10ActiveJobs()).thenReturn(List.of(job));
+        when(discoveredJobRepository.findTop150ActiveJobs()).thenReturn(List.of(job));
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(job), any(), anyInt(), anyBoolean())).thenReturn(
+                ResumeMatchService.MatchResult.builder()
+                        .matchScore(85)
+                        .matchedSkills(List.of("Java", "Spring"))
+                        .missingSkills(List.of())
+                        .build()
+        );
 
         List<DiscoveredJobDto> cachedJobs = jobDiscoveryService.getCached();
 
         assertEquals(1, cachedJobs.size());
         assertEquals("Razorpay", cachedJobs.get(0).getCompany());
-        assertNotNull(cachedJobs.get(0).getMatchScore());
+        assertEquals(85, cachedJobs.get(0).getMatchScore());
+    }
+
+    @Test
+    @DisplayName("getCached should strictly exclude non-technical jobs like safety or supply managers")
+    void testGetCachedFiltersOutNonTechnicalJobs() {
+        when(userRepository.findByEmail("test.developer@example.com")).thenReturn(Optional.of(testUser));
+        when(userJobInteractionRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
+        when(skillRepository.findByUserId("user-1")).thenReturn(Collections.emptyList());
+
+        DiscoveredJob techJob = DiscoveredJob.builder()
+                .id("job-razorpay-1")
+                .title("Backend Engineer")
+                .company("Razorpay")
+                .sourceType("CAREER_PAGE_ATS")
+                .isActive(true)
+                .build();
+
+        DiscoveredJob safetyJob = DiscoveredJob.builder()
+                .id("job-airbnb-safety")
+                .title("Senior Manager, Safety")
+                .company("Airbnb")
+                .sourceType("CAREER_PAGE_ATS")
+                .isActive(true)
+                .build();
+
+        DiscoveredJob supplyJob = DiscoveredJob.builder()
+                .id("job-airbnb-supply")
+                .title("Head of Homes Supply, Indonesia")
+                .company("Airbnb")
+                .sourceType("CAREER_PAGE_ATS")
+                .isActive(true)
+                .build();
+
+        when(discoveredJobRepository.findTop150ActiveJobs()).thenReturn(List.of(safetyJob, supplyJob, techJob));
+        when(resumeMatchService.calculateTier1Score(eq(testUser), eq(techJob), any(), anyInt(), anyBoolean())).thenReturn(
+                ResumeMatchService.MatchResult.builder()
+                        .matchScore(88)
+                        .matchedSkills(List.of("Java"))
+                        .missingSkills(List.of())
+                        .build()
+        );
+
+        List<DiscoveredJobDto> cachedJobs = jobDiscoveryService.getCached();
+
+        assertEquals(1, cachedJobs.size());
+        assertEquals("Razorpay", cachedJobs.get(0).getCompany());
+        assertEquals("Backend Engineer", cachedJobs.get(0).getTitle());
     }
 
     @Test

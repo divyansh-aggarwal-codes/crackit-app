@@ -77,7 +77,7 @@ public class ResumeMatchService {
     }
 
     public enum TechDomain {
-        BACKEND, FRONTEND, FULLSTACK, DEVOPS, DATA, MOBILE, QA, GENERAL_TECH
+        BACKEND, FRONTEND, FULLSTACK, DEVOPS, DATA, MOBILE, QA, GENERAL_TECH, NON_TECH
     }
 
     // Technology ecosystem groupings for generalized multi-profile matching
@@ -143,6 +143,15 @@ public class ResumeMatchService {
         String jobDesc = (job.getDescription() != null ? job.getDescription() : "").toLowerCase();
         String fullJobCorpus = jobTitle + " " + jobDesc;
 
+        // Disqualify non-technical roles immediately (e.g. Safety, Supply, Culinary, Hospitality)
+        if (!JobUrlNormalizer.isTechnicalJob(job.getTitle())) {
+            return MatchResult.builder()
+                    .matchScore(15)
+                    .matchedSkills(List.of())
+                    .missingSkills(List.of())
+                    .build();
+        }
+
         // 1. Ingest Candidate Profile
         List<Skill> safeSkills = userSkills != null ? userSkills : List.of();
         Set<String> userSkillSet = safeSkills.stream()
@@ -203,6 +212,10 @@ public class ResumeMatchService {
     }
 
     private TechDomain detectDomain(String title, Set<String> skillsOrTokens) {
+        if (!JobUrlNormalizer.isTechnicalJob(title)) {
+            return TechDomain.NON_TECH;
+        }
+
         String titleLower = title.toLowerCase();
 
         for (Map.Entry<TechDomain, Set<String>> entry : DOMAIN_KEYWORDS.entrySet()) {
@@ -225,6 +238,10 @@ public class ResumeMatchService {
     }
 
     private int calculateRoleAlignment(String targetRole, TechDomain candidateDomain, String jobTitle, TechDomain jobDomain) {
+        if (jobDomain == TechDomain.NON_TECH || !JobUrlNormalizer.isTechnicalJob(jobTitle)) {
+            return 0; // Incompatible non-technical domain
+        }
+
         // Severe domain clash check
         if (isDomainClash(candidateDomain, jobDomain, jobTitle)) {
             return 5; // Incompatible domain
@@ -256,6 +273,9 @@ public class ResumeMatchService {
     }
 
     private boolean isDomainClash(TechDomain candidateDomain, TechDomain jobDomain, String jobTitle) {
+        if (jobDomain == TechDomain.NON_TECH) {
+            return true;
+        }
         if (candidateDomain == TechDomain.BACKEND) {
             if (jobDomain == TechDomain.FRONTEND || jobDomain == TechDomain.QA || jobDomain == TechDomain.MOBILE) {
                 return true;

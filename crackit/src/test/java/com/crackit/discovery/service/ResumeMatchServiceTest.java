@@ -384,4 +384,45 @@ class ResumeMatchServiceTest {
         assertEquals("Advanced", fallbackSkill.get("proficiencyLevel"));
         assertEquals(5, fallbackSkill.get("yearsUsed"));
     }
+
+    @Test
+    @DisplayName("Non-technical roles (Safety Manager, Homes Supply) should receive floor score of 15% and empty matched skills")
+    void testNonTechnicalJobShouldScoreFloor15() {
+        User user = User.builder()
+                .id("user-backend-eng")
+                .targetRole("Senior Java Backend Engineer")
+                .preferredWorkMode("Remote")
+                .yearsExperience(6)
+                .build();
+
+        DiscoveredJob safetyJob = DiscoveredJob.builder()
+                .id("job-safety-1")
+                .title("Senior Manager, Safety")
+                .description("Lead global safety operations, trust protocols, and team security.")
+                .location("Remote")
+                .remote(true)
+                .build();
+
+        DiscoveredJob supplyJob = DiscoveredJob.builder()
+                .id("job-supply-1")
+                .title("Head of Homes Supply, Indonesia")
+                .description("Manage home supply partnerships, hosts, and regional operations in Indonesia.")
+                .location("Indonesia")
+                .remote(false)
+                .build();
+
+        when(skillRepository.findByUserId("user-backend-eng")).thenReturn(List.of(
+                Skill.builder().skillName("Java").proficiencyLevel("Expert").build(),
+                Skill.builder().skillName("Spring Boot").proficiencyLevel("Expert").build()
+        ));
+
+        ResumeMatchService.MatchResult safetyResult = matchService.calculateTier1Score(user, safetyJob);
+        ResumeMatchService.MatchResult supplyResult = matchService.calculateTier1Score(user, supplyJob);
+
+        assertEquals(15, safetyResult.getMatchScore(), "Safety Manager must score 15");
+        assertTrue(safetyResult.getMatchedSkills().isEmpty());
+
+        assertEquals(15, supplyResult.getMatchScore(), "Head of Homes Supply must score 15");
+        assertTrue(supplyResult.getMatchedSkills().isEmpty());
+    }
 }

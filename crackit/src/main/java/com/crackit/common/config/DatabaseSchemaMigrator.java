@@ -145,6 +145,46 @@ public class DatabaseSchemaMigrator implements ApplicationRunner {
                 ")"
             );
 
+            // Deactivate legacy non-technical jobs in discovered_jobs (e.g. Safety, Supply, Housekeeping, etc.)
+            try {
+                int cleaned = stmt.executeUpdate(
+                    "UPDATE `discovered_jobs` SET `is_active` = FALSE " +
+                    "WHERE (`is_active` IS NULL OR `is_active` = TRUE) " +
+                    "AND (" +
+                    "LOWER(`title`) LIKE '%safety%' OR " +
+                    "LOWER(`title`) LIKE '%homes supply%' OR " +
+                    "LOWER(`title`) LIKE '%supply chain%' OR " +
+                    "LOWER(`title`) LIKE '%culinary%' OR " +
+                    "LOWER(`title`) LIKE '%chef%' OR " +
+                    "LOWER(`title`) LIKE '%housekeep%' OR " +
+                    "LOWER(`title`) LIKE '%receptionist%' OR " +
+                    "LOWER(`title`) LIKE '%concierge%' OR " +
+                    "LOWER(`title`) LIKE '%warehouse%' OR " +
+                    "LOWER(`title`) LIKE '%cashier%' OR " +
+                    "LOWER(`title`) LIKE '%flight attendant%' OR " +
+                    "LOWER(`title`) LIKE '%driver%'" +
+                    ") " +
+                    "AND LOWER(`title`) NOT LIKE '%engineer%' " +
+                    "AND LOWER(`title`) NOT LIKE '%developer%' " +
+                    "AND LOWER(`title`) NOT LIKE '%software%'"
+                );
+                if (cleaned > 0) {
+                    log.info("DatabaseSchemaMigrator: Deactivated {} legacy non-technical job postings.", cleaned);
+                }
+            } catch (Exception e) {
+                log.debug("Non-technical job cleanup query skipped: {}", e.getMessage());
+            }
+
+            // Downgrade interaction scores for inactive non-technical jobs so they never appear in notifications or recommendations
+            try {
+                stmt.executeUpdate(
+                    "UPDATE `user_job_interactions` uji " +
+                    "JOIN `discovered_jobs` dj ON uji.`discovered_job_id` = dj.`id` " +
+                    "SET uji.`match_score` = 15 " +
+                    "WHERE dj.`is_active` = FALSE"
+                );
+            } catch (Exception ignored) {}
+
             // Seed default curated companies
             seedCuratedCompanies(stmt);
 

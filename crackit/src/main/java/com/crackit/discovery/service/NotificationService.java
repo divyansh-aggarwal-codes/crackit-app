@@ -8,6 +8,7 @@ import com.crackit.discovery.entity.UserJobInteraction;
 import com.crackit.discovery.repository.DiscoveredJobRepository;
 import com.crackit.discovery.repository.NotificationRepository;
 import com.crackit.discovery.repository.UserJobInteractionRepository;
+import com.crackit.discovery.util.JobUrlNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -263,12 +264,14 @@ public class NotificationService {
 
         if (matches.isEmpty() && discoveredJobRepository != null) {
             log.info("[NOTIFICATION SERVICE] Generating baseline matches for user {} directly from active catalog.", user.getEmail());
-            List<DiscoveredJob> baseline = discoveredJobRepository.findTop10ActiveJobs();
+            List<DiscoveredJob> baseline = discoveredJobRepository.findTop150ActiveJobs();
             matches = new ArrayList<>();
             for (DiscoveredJob dj : baseline) {
-                if (resumeMatchService != null) {
+                if (JobUrlNormalizer.isTechnicalJob(dj.getTitle()) && resumeMatchService != null) {
                     ResumeMatchService.MatchResult m = resumeMatchService.calculateTier1Score(user, dj, false);
-                    matches.add(resumeMatchService.recordInteraction(user, dj, m, "NEW"));
+                    if (m.getMatchScore() >= 40) {
+                        matches.add(resumeMatchService.recordInteraction(user, dj, m, "NEW"));
+                    }
                 }
             }
         }

@@ -264,13 +264,27 @@ public class CompanyAtsDiscoveryProvider implements JobDiscoveryProvider {
     }
 
     private boolean matchesFilter(String title, String desc, String location, String keyword, String filterLoc) {
+        if (!JobUrlNormalizer.isTechnicalJob(title)) {
+            return false;
+        }
+
         if (keyword != null && !keyword.isBlank()) {
-            String[] tokens = keyword.split("\\s+");
+            String[] tokens = keyword.toLowerCase().split("\\s+");
             boolean matchesToken = false;
+            String lowerTitle = (title != null ? title : "").toLowerCase();
             for (String t : tokens) {
-                if (t.length() >= 3 && (title.toLowerCase().contains(t) || desc.toLowerCase().contains(t))) {
+                if (t.length() >= 3 && lowerTitle.contains(t)) {
                     matchesToken = true;
                     break;
+                }
+            }
+            if (!matchesToken) {
+                String lowerDesc = (desc != null ? desc : "").toLowerCase();
+                for (String t : tokens) {
+                    if (t.length() >= 3 && lowerDesc.contains(t)) {
+                        matchesToken = true;
+                        break;
+                    }
                 }
             }
             if (!matchesToken) return false;

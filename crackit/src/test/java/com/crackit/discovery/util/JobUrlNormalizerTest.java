@@ -51,4 +51,30 @@ class JobUrlNormalizerTest {
         assertEquals("stripe", normalizer.normalizeCompany("Stripe Inc."));
         assertEquals("stripe", normalizer.normalizeCompany("Stripe Technologies LLC"));
     }
+
+    @Test
+    @DisplayName("Should correctly classify technical vs non-technical job titles")
+    void testIsTechnicalJobValidation() {
+        // Disqualify non-tech roles
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Senior Manager, Safety"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Head of Homes Supply, Indonesia"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Housekeeping Supervisor"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Sales Development Representative"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Talent Acquisition Partner"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Legal Counsel - Compliance"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob("Executive Chef"));
+        assertFalse(JobUrlNormalizer.isTechnicalJob(""));
+        assertFalse(JobUrlNormalizer.isTechnicalJob(null));
+
+        // Accept technical roles
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Senior Backend Engineer"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Software Development Engineer II (Java, AWS)"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Forward Deployed Engineer"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Software Engineer, Trust & Safety"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Staff Java Developer"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Lead DevOps / SRE"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("Data Scientist - AI/ML"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("SDET / QA Automation Engineer"));
+        assertTrue(JobUrlNormalizer.isTechnicalJob("VP of Engineering"));
+    }
 }
